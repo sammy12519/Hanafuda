@@ -101,6 +101,49 @@ def get_surf(font, text, color = WHITE):
     rect = surf.get_rect()
     return surf, rect
 
+class TextPanel:
+    def __init__(self, font, texts, color = WHITE, back_color = BLACK):
+        self.font = font
+        self.texts = texts
+        self.surfs = []
+        self.rects = []
+        self.text_num = len(texts)
+        for text in texts:
+            surf, rect = get_surf(font, text, color)
+            self.surfs.append(surf)
+            self.rects.append(rect)
+        self.boarder = 5
+        self.text_height = self.rects[0].height
+        self.spacing_rate = 0.5
+        self.spacing = self.text_height * self.spacing_rate
+        self.width = np.max([rect.width for rect in self.rects]) + 2 * self.boarder
+        self.height = (self.text_height + self.spacing) * self.text_num - self.spacing + 2 * self.boarder
+        self.size = [self.width, self.height]
+        self.center = [self.width / 2, self.height / 2]
+        self.topleft = []
+        self.set_center(self.center)
+        self.color = color
+        self.back_color = back_color
+
+    def set_center(self, pos):
+        self.center = pos
+        self.topleft = [pos[0] - self.width / 2, 
+                        pos[1] - self.height / 2]
+        for idx, rect in enumerate(self.rects):
+            y = self.topleft[1] + self.boarder + self.text_height / 2 + (self.text_height + self.spacing) * idx
+            rect.center = [pos[0], y]
+
+    def ProcessInput(self, events, pressed_keys):
+        pass
+
+    def Update(self):
+        pass
+
+    def Render(self, screen):
+        pygame.draw.rect(screen, self.back_color, self.topleft + self.size)
+        for surf, rect in zip(self.surfs, self.rects):
+            screen.blit(surf, rect)
+
 class Button:
     def __init__(self, font, text, color = WHITE, back_color = BLACK):
         self.font = font
@@ -231,7 +274,12 @@ class Rules:
         self.state = self.state_dic['idle'] 
         self.text = ''
         self.pump_idx = 0
-        self.koikoi_panel = YesNoPanel(self.font, u'こいこいしますか？', u'はい', u'いいえ')
+        self.color = WHITE
+        self.back_color = BLACK
+        self.boarder = 10
+        self.koikoi_panel = YesNoPanel(self.font, u'こいこいしますか？',
+                                       u'はい', u'いいえ', self.color,
+                                       self.back_color)
         self.koikoi_panel.set_center([WINDOW_SIZE_X / 2, WINDOW_SIZE_Y / 2])
 
     def IsNotIdle(self):
@@ -261,7 +309,7 @@ class Rules:
                     new_pattern = True
                     cards = []
                     for idx, i in enumerate(pattern[2]):
-                        cards.append(cards_prop[idx][:i])
+                        cards = cards + cards_prop[idx][:i]
                     new_patterns.append(pattern[:-1] + [cards])
         # for kou in self.kous:
             # if (in_arr > pattern[2]).all():
@@ -321,17 +369,30 @@ class Rules:
             self.state = self.state_dic['pump']
             self.pump_idx = 0
 
+    def PumpRender(self, screen):
+        pygame.draw.rect(screen, BLACK, self.window_pos + self.window_size)
+        pattern = self.new_patterns[self.pump_idx]
+        texts = [pattern[0], str(pattern[1]) + '文']
+        text_panel = TextPanel(self.font, texts, self.color, self.back_color)
+        text_panel_x = self.window_pos_x + self.boarder + text_panel.width / 2
+        text_panel_y = self.window_pos_y + self.window_size[1] / 2
+        text_panel.set_center([text_panel_x, text_panel_y])
+        text_panel.Render(screen)
+        center_y = self.window_pos_y + self.window_size[1] / 2
+        left = text_panel_x + text_panel.width / 2 + self.boarder + CARD_WIDTH / 2 + CARD_BOARDER
+        right = self.window_pos_x + self.window_size[0] - self.boarder - CARD_WIDTH / 2 - CARD_BOARDER
+        center_x = np.linspace(left, right, len(pattern[2])) 
+        for x, card in zip(center_x, pattern[2]):
+            card.Draw(screen, [x, center_y], location = 'center')
+        # text_center_x = int(self.window_pos_x + BOARDER + text_rect.width / 2)
+        # text_center_y = int(self.window_pos_y + self.window_size[1] / 2)
+        # text_rect.center = [text_center_x, text_center_y]
+        # screen.blit(text_surface, text_rect)
+
+
     def Render(self, screen):
         if self.state == self.state_dic['pump']:
-            pygame.draw.rect(screen, BLACK, self.window_pos + self.window_size)
-            pattern = self.new_patterns[self.pump_idx]
-            text = pattern[0] + '\n' + str(pattern[1]) + '文'
-            text_surface = self.font.render(text, True, WHITE)
-            text_rect = text_surface.get_rect()
-            text_center_x = int(self.window_pos_x + BOARDER + text_rect.width / 2)
-            text_center_y = int(self.window_pos_y + self.window_size[1] / 2)
-            text_rect.center = [text_center_x, text_center_y]
-            screen.blit(text_surface, text_rect)
+            self.PumpRender(screen)
         elif self.state == self.state_dic['koikoi']:
             self.koikoi_panel.Render(screen)
 
@@ -361,6 +422,8 @@ class Card:
         self.to_scored_area = False
         self.in_pool_idx = None
         self.parent = None
+        self.card_width = CARD_WIDTH + 2 * CARD_BOARDER
+        self.card_height = CARD_HEIGHT + 2 * CARD_BOARDER
 
     def toggle_selected(self):
         self.selected = not self.selected
@@ -403,15 +466,22 @@ class Card:
                 self.fig_pos = self.get_fig_pos(self.pos)
                 self.frame = self.frame + 1
 
-    def Render(self, screen):
-        wrap_rect =self. pos + CARD_SIZE
-        fig_rect = self.fig_pos + FIG_SIZE
+    def Draw(self, screen, pos, location = 'topleft'):
+        if location == 'center':
+            pos = [pos[0] - self.card_width / 2,
+                   pos[1] - self.card_height / 2]
+        wrap_rect = pos + CARD_SIZE
+        fig_pos = self.get_fig_pos(pos)
+        fig_rect = fig_pos + FIG_SIZE
         if self.selected:
             pygame.draw.rect(screen, YELLOW, wrap_rect)
         else:
             pygame.draw.rect(screen, BLACK, wrap_rect)
         pygame.draw.rect(screen, WHITE, fig_rect)
-        screen.blit(self.image, self.fig_pos)
+        screen.blit(self.image, fig_pos)
+
+    def Render(self, screen):
+        self.Draw(screen, self.pos)
 
 class Deck:
     def __init__(self, card_list, y, month):
@@ -421,6 +491,7 @@ class Deck:
             card.parent = self.cards
         self.score_dic = {'kou':0, 'tane':1, 'tan':2, 'kasu':3}
         self.scored_cards = [[] for i in range(0, len(self.score_dic))]
+        self.scored_cards_render = []
         self.prop_arr = np.zeros(PROP_DIC_LEN, dtype=int)
         self.scored_cards_prop = [[] for i in range(0, PROP_DIC_LEN)]
         self.pool = None
@@ -461,6 +532,7 @@ class Deck:
                 self.scored_cards_prop[idx].append(card)
         print('type_idx in scored_cards is ' + str(type_idx))
         self.scored_cards[type_idx].append(card)
+        self.scored_cards_render.append(card)
 
     def ScoredCardUpdate(self):
         [x, y] = self.right_corner
@@ -497,9 +569,8 @@ class Deck:
     def Render(self, screen):
         for card in self.cards:
             card.Render(screen)
-        for cards in self.scored_cards:
-            for card in cards:
-                card.Render(screen)
+        for card in self.scored_cards_render:
+            card.Render(screen)
         self.rules.Render(screen)
 
 
@@ -609,7 +680,7 @@ class Round:
         if idx != None:
             self.selected_card.in_pool_idx = idx
         if len(self.matched_cards) == 1:
-            for card in [self.selected_card, self.matched_cards[0]]:
+            for card in [self.matched_cards[0], self.selected_card]:
                 card.scored(self.player)
                 deck.ScoreCard(card)
                 if card.in_pool_idx != None:

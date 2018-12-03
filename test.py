@@ -24,6 +24,50 @@ def get_surf(font, text, color = WHITE):
     rect = surf.get_rect()
     return surf, rect
 
+class TextPanel:
+    def __init__(self, font, texts, color = WHITE, back_color = BLACK):
+        self.font = font
+        self.texts = texts
+        self.surfs = []
+        self.rects = []
+        self.text_num = len(texts)
+        for text in texts:
+            surf, rect = get_surf(font, text, color)
+            self.surfs.append(surf)
+            self.rects.append(rect)
+        self.boarder = 5
+        self.text_height = self.rects[0].height
+        self.spacing_rate = 0.5
+        self.spacing = self.text_height * self.spacing_rate
+        self.width = np.max([rect.width for rect in self.rects]) + 2 * self.boarder
+        self.height = (self.text_height + self.spacing) * self.text_num - self.spacing + 2 * self.boarder
+        self.size = [self.width, self.height]
+        self.center = [self.width / 2, self.height / 2]
+        self.topleft = []
+        self.set_center(self.center)
+        self.color = color
+        self.back_color = back_color
+
+    def set_center(self, pos):
+        self.center = pos
+        self.topleft = [pos[0] - self.width / 2, 
+                        pos[1] - self.height / 2]
+        for idx, rect in enumerate(self.rects):
+            y = self.topleft[1] + self.boarder + self.text_height / 2 + (self.text_height + self.spacing) * idx
+            rect.center = [pos[0], y]
+
+    def ProcessInput(self, events, pressed_keys):
+        pass
+
+    def Update(self):
+        pass
+
+    def Render(self, screen):
+        pygame.draw.rect(screen, self.back_color, self.topleft + self.size)
+        for surf, rect in zip(self.surfs, self.rects):
+            screen.blit(surf, rect)
+        
+
 class Button:
     def __init__(self, font, text, color = WHITE, back_color = BLACK):
         self.font = font
@@ -138,7 +182,8 @@ while True:
             exit()
  
     screen.fill(pygame.Color('yellow'))
-    panel = YesNoPanel(font, u'こいこいしますか？', u'はい', u'いいえ')
+    # panel = YesNoPanel(font, u'こいこいしますか？', u'はい', u'いいえ')
+    panel = TextPanel(font, [u'こいこいしますか？', u'はい', u'いいえ'])
     panel.set_center([300, 300])
     panel.ProcessInput(events, None)
     panel.Render(screen)
