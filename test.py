@@ -3,6 +3,7 @@
 import pygame
 from pygame.locals import *
 from sys import exit
+import numpy as np
  
 pygame.init()
 screen = pygame.display.set_mode((1280, 800), 0, 32)
@@ -22,7 +23,6 @@ def get_surf(font, text, color = WHITE):
     surf = font.render(text, True, color)
     rect = surf.get_rect()
     return surf, rect
-
 
 class Button:
     def __init__(self, font, text, color = WHITE, back_color = BLACK):
@@ -74,6 +74,57 @@ class Button:
         else:
             pygame.draw.rect(screen, self.back_color, self.rect) 
         screen.blit(self.text_surf, self.text_rect)
+
+class YesNoPanel:
+    def __init__(self, font, q_text, y_text, n_text,
+                 color = WHITE, back_color = BLACK):
+        self.color = color
+        self.back_color = back_color
+        self.q_surf, self.q_rect = get_surf(font, q_text, color)
+        self.y_button = Button(font, y_text, color, back_color)
+        self.n_button = Button(font, n_text, color, back_color)
+        self.buttons = [self.y_button, self.n_button]
+        self.spacing = np.maximum(self.y_button.width, self.n_button.width)
+        self.center_y = self.q_rect.center[1] + self.q_rect.height
+        self.center_x = self.q_rect.center[0]
+        self.center = [self.center_x, self.center_y]
+        b_w = np.maximum(self.y_button.width, self.n_button.width)
+        self.boarder = 20
+        self.width = np.maximum(self.q_rect.width, 3 * b_w) + 2 * self.boarder
+        self.height = 3 * self.q_rect.height + 2 * self.boarder
+        self.size = [self.width, self.height]
+        self.topleft = []
+        self.set_center(self.center)
+
+    def set_center(self, center):
+        self.center = center
+        self.topleft = [self.center[0] - self.width / 2, self.center[1] - self.height / 2]
+        self.q_rect.center = [center[0], center[1] - self.q_rect.height]
+        b_w = np.maximum(self.y_button.width, self.n_button.width)
+        y_x = self.center[0] + (b_w - self.width) / 2 + self.boarder
+        n_x = self.center[0] - (b_w - self.width) / 2 - self.boarder
+        self.y_button.set_center([y_x, self.center[1] + self.q_rect.height])
+        self.n_button.set_center([n_x, self.center[1] + self.q_rect.height])
+
+    def ProcessInput(self, events, pressed_keys):
+        if self.y_button.ProcessInput(events, pressed_keys):
+            print('yes')
+            return True
+        elif self.n_button.ProcessInput(events, pressed_keys):
+            print('no')
+            return False
+        else:
+            return None
+
+    def Update(self):
+        for button in self.buttons:
+            botton.Update()
+
+    def Render(self, screen):
+        pygame.draw.rect(screen, self.back_color, self.topleft + self.size)
+        for button in self.buttons:
+            button.Render(screen)
+        screen.blit(self.q_surf, self.q_rect)
  
 x = 0
 y = (800 - text_surface.get_height())/2
@@ -87,11 +138,15 @@ while True:
             exit()
  
     screen.fill(pygame.Color('yellow'))
-    b = Button(font, u'はい')
-    b.set_center([100, 100])
-    b.Update()
-    b.ProcessInput(events, None)
-    b.Render(screen)
+    panel = YesNoPanel(font, u'こいこいしますか？', u'はい', u'いいえ')
+    panel.set_center([300, 300])
+    panel.ProcessInput(events, None)
+    panel.Render(screen)
+    # b = Button(font, u'はい')
+    # b.set_center([100, 100])
+    # b.Update()
+    # b.ProcessInput(events, None)
+    # b.Render(screen)
  
  
     screen.blit(text_surface, (0, 0))

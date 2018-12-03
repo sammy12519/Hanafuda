@@ -35,6 +35,25 @@ CARD_POS = UP_CARD_POS + DOWN_CARD_POS + MIDDLE_CARD_POS[:8]
 DECK_SIZE = 8
 POOL_SIZE = 8
 
+COVER_BOARDER = 10
+
+#colors
+WHITE = [255, 255, 255]
+YELLOW = [255, 255, 0]
+BLACK = [0, 0, 0]
+GRAY = [128, 128, 128]
+BLUE = [0, 128, 255]
+
+CARD_CONTENTS = [[i, j] for i in range(1, 13) for j in range(1, 5)]
+card_contents = CARD_CONTENTS
+
+screen = pygame.display.set_mode((WINDOW_SIZE_X, WINDOW_SIZE_Y))
+done = False
+flag = True
+
+# MOVE_TIME = 0.5
+MOVE_FRAME = 30
+
 #card properties
 prop_dic = {'kou':0, 'subkou':1, 'tane':2, 'tane_ani':3, 'tan':4, 'tan_r':5, 'tan_b':6, 'kasu':7}
 PROP_DIC_LEN = 8
@@ -136,35 +155,55 @@ class Button:
 class YesNoPanel:
     def __init__(self, font, q_text, y_text, n_text,
                  color = WHITE, back_color = BLACK):
-        self.text_list = [q_text, y_text, n_text]
-        self.surf_list = [self.q_surf, self.y_surf, self.n_surf]
-        self.rect_list = [self.q_rect, self.y_rect, self.n_rect]
-        lists = zip(self.text_list, self.surf_list, self.rect_list)
-        for text, surf, rect in lists:
-            surf, rect = get_surf(font, text, color)
+        self.color = color
+        self.back_color = back_color
+        self.q_surf, self.q_rect = get_surf(font, q_text, color)
+        self.y_button = Button(font, y_text, color, back_color)
+        self.n_button = Button(font, n_text, color, back_color)
+        self.buttons = [self.y_button, self.n_button]
+        self.spacing = np.maximum(self.y_button.width, self.n_button.width)
+        self.center_y = self.q_rect.center[1] + self.q_rect.height
+        self.center_x = self.q_rect.center[0]
+        self.center = [self.center_x, self.center_y]
+        b_w = np.maximum(self.y_button.width, self.n_button.width)
+        self.boarder = 20
+        self.width = np.maximum(self.q_rect.width, 3 * b_w) + 2 * self.boarder
+        self.height = 3 * self.q_rect.height + 2 * self.boarder
+        self.size = [self.width, self.height]
+        self.topleft = []
+        self.set_center(self.center)
+
+    def set_center(self, center):
+        self.center = center
+        self.topleft = [self.center[0] - self.width / 2, self.center[1] - self.height / 2]
+        self.q_rect.center = [center[0], center[1] - self.q_rect.height]
+        b_w = np.maximum(self.y_button.width, self.n_button.width)
+        y_x = self.center[0] + (b_w - self.width) / 2 + self.boarder
+        n_x = self.center[0] - (b_w - self.width) / 2 - self.boarder
+        self.y_button.set_center([y_x, self.center[1] + self.q_rect.height])
+        self.n_button.set_center([n_x, self.center[1] + self.q_rect.height])
 
     def ProcessInput(self, events, pressed_keys):
-        pos = pygame.mouse.get_pos()
-        if self.Collide(pos):
-            self.move_on = True
-            for event in events:
-                if event.type == pygame.MOUSEBUTTONDOWN:
-                    print('Button is clicked')
-                    return True
+        for button in self.buttons:
+            button.ProcessInput(events, pressed_keys)
+        if self.y_button.ProcessInput(events, pressed_keys):
+            print('yes')
+            return True
+        elif self.n_button.ProcessInput(events, pressed_keys):
+            print('no')
+            return False
         else:
-            self.move_on = False
-        return False
+            return None
 
     def Update(self):
-        pass
+        for button in self.buttons:
+            botton.Update()
 
     def Render(self, screen):
-        if self.move_on:
-            pygame.draw.rect(screen, self.color, self.rect)
-            pygame.draw.rect(screen, self.back_color, self.text_rect) 
-        else:
-            pygame.draw.rect(screen, self.back_color, self.rect) 
-        screen.blit(self.text_surf, self.text_rect)
+        pygame.draw.rect(screen, self.back_color, self.topleft + self.size)
+        screen.blit(self.q_surf, self.q_rect)
+        for button in self.buttons:
+            button.Render(screen)
         
 
 #scoring rules
@@ -192,6 +231,11 @@ class Rules:
         self.state = self.state_dic['idle'] 
         self.text = ''
         self.pump_idx = 0
+        self.koikoi_panel = YesNoPanel(self.font, u'こいこいしますか？', u'はい', u'いいえ')
+        self.koikoi_panel.set_center([WINDOW_SIZE_X / 2, WINDOW_SIZE_Y / 2])
+
+    def IsNotIdle(self):
+        return self.state != self.state_dic['idle']
 
     def Check(self, pattern, name):
         record = self.records.get(name)
@@ -252,20 +296,28 @@ class Rules:
                 pos[1] >= self.window_pos[1] and 
                 pos[1] <= self.window_pos[1] + self.window_size[1])
 
-    def ProcessInput(self, events):
-        for event in events:
-            if event.type == pygame.MOUSEBUTTONDOWN:
-                pos = pygame.mouse.get_pos()
-                if self.Collide(pos):
-                    print('window is clicked')
-                    if self.state == self.state_dic['pump']:
+    def ProcessInput(self, events, pressed_keys):
+        if self.state == self.state_dic['koikoi']:
+            self.koikoi_panel.ProcessInput(events, pressed_keys)
+        else:
+            for event in events:
+                if event.type == pygame.MOUSEBUTTONDOWN:
+                    pos = pygame.mouse.get_pos()
+                    if self.state == self.state_dic['pump'] and self.Collide(pos):
+                        print('window is clicked')
+                        print('and the state is now pump')
                         self.pump_idx = self.pump_idx + 1
+                        print('pump idx : ' + str(self.pump_idx))
+                        print('new_patterns : ' + str(self.new_patterns))
                         if self.pump_idx == len(self.new_patterns):
-                            # self.state = self.state_dic['koikoi']
-                            self.state = self.state_dic['idle']
+                            self.state = self.state_dic['koikoi']
+                            print('the state is now koikoi')
+                            # self.state = self.state_dic['idle']
+                        
 
     def Update(self):
         if self.new_patterns != [] and self.state == self.state_dic['idle']:
+            print('change to state pump!')
             self.state = self.state_dic['pump']
             self.pump_idx = 0
 
@@ -281,29 +333,7 @@ class Rules:
             text_rect.center = [text_center_x, text_center_y]
             screen.blit(text_surface, text_rect)
         elif self.state == self.state_dic['koikoi']:
-            question = u'こいこいしますか？'
-            q_surf = self.font.render(text, True, WHITE)
-            q_rect = q_surf.get_rect()
-
-
-COVER_BOARDER = 10
-
-#colors
-WHITE = [255, 255, 255]
-YELLOW = [255, 255, 0]
-BLACK = [0, 0, 0]
-GRAY = [128, 128, 128]
-BLUE = [0, 128, 255]
-
-CARD_CONTENTS = [[i, j] for i in range(1, 13) for j in range(1, 5)]
-card_contents = CARD_CONTENTS
-
-screen = pygame.display.set_mode((WINDOW_SIZE_X, WINDOW_SIZE_Y))
-done = False
-flag = True
-
-# MOVE_TIME = 0.5
-MOVE_FRAME = 30
+            self.koikoi_panel.Render(screen)
 
 _image_library = {}
 def get_image(path):
@@ -404,11 +434,14 @@ class Deck:
         self.type_spacing = 10
 
     def ProcessInput(self, events, pressed_keys):
-        for card in self.cards:
-            selected_card = card.ProcessInput(events, pressed_keys)
-            if selected_card != None:
-                print('deck get selected card!')
-                return selected_card
+        if self.rules.IsNotIdle():
+            self.rules.ProcessInput(events, pressed_keys)
+        else:
+            for card in self.cards:
+                selected_card = card.ProcessInput(events, pressed_keys)
+                if selected_card != None:
+                    print('deck get selected card!')
+                    return selected_card
         return None
 
     def CheckPatterns(self):
@@ -537,7 +570,7 @@ class Round:
                     self.matched_cards = [pool_selected_card]
         else:
             selected_card = None
-            if self.state == self.state_dic['idle']:
+            if self.state == self.state_dic['idle'] or self.state == self.state_dic['koikoi']:
                 deck = self.decks[self.player]
                 selected_card = deck.ProcessInput(filtered_events, pressed_keys)
             if selected_card != None:
@@ -595,6 +628,7 @@ class Round:
         print('to idle state')
         deck = self.decks[self.player]
         if self.state != self.state_dic['koikoi'] and deck.CheckPatterns():
+            print('change to state koikoi and now player is %d' % self.player)
             self.state = self.state_dic['koikoi']
         else:
             self.state = self.state_dic['idle']
