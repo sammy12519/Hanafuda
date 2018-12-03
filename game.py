@@ -255,10 +255,10 @@ class Rules:
         self.patterns = [[u'猪鹿蝶', 5, property_array([prop_dic['tane_ani']] * 3)],
                          [u'赤短', 6, property_array([prop_dic['tan_r']] * 3)],
                          [u'青短', 6, property_array([prop_dic['tan_b']] * 3)]]
-        self.kous = [[u'三光', 6, property_array([prop_dic['kou']] * 3)],
+        self.kous = [[u'五光', 15, property_array([prop_dic['kou']] * 4 + [prop_dic['subkou']])],
+                     [u'雨四光', 8, property_array([prop_dic['kou']] * 3 + [prop_dic['subkou']])],
                      [u'四光', 10, property_array([prop_dic['kou']] * 4)],
-                     [u'五光', 15, property_array([prop_dic['kou']] * 4 + [prop_dic['subkou']])],
-                     [u'雨四光', 8, property_array([prop_dic['kou']] * 3 + [prop_dic['subkou']])]]
+                     [u'三光', 6, property_array([prop_dic['kou']] * 3)]]  
         self.kasu_lim = 10
         self.tane_lim = 5
         self.tan_lim = 5
@@ -336,6 +336,10 @@ class Rules:
                     new_patterns.append(pattern + [cards])
         if new_pattern:
             self.new_patterns = new_patterns
+            if self.new_patterns != [] and self.state == self.state_dic['idle']:
+                print('change to state pump!')
+                self.state = self.state_dic['pump']
+                self.pump_idx = 0
         return new_pattern
 
     def Collide(self, pos):
@@ -346,7 +350,12 @@ class Rules:
 
     def ProcessInput(self, events, pressed_keys):
         if self.state == self.state_dic['koikoi']:
-            self.koikoi_panel.ProcessInput(events, pressed_keys)
+            Res = self.koikoi_panel.ProcessInput(events, pressed_keys)
+            if Res == True:
+                self.state = self.state_dic['idle']
+            elif Res == False:
+                #point evaluation stage
+                pass
         else:
             for event in events:
                 if event.type == pygame.MOUSEBUTTONDOWN:
@@ -364,10 +373,11 @@ class Rules:
                         
 
     def Update(self):
-        if self.new_patterns != [] and self.state == self.state_dic['idle']:
-            print('change to state pump!')
-            self.state = self.state_dic['pump']
-            self.pump_idx = 0
+        pass
+        # if self.new_patterns != [] and self.state == self.state_dic['idle']:
+            # print('change to state pump!')
+            # self.state = self.state_dic['pump']
+            # self.pump_idx = 0
 
     def PumpRender(self, screen):
         pygame.draw.rect(screen, BLACK, self.window_pos + self.window_size)
@@ -738,6 +748,9 @@ class Round:
                 self.matched_cards = self.CheckPool(self.selected_card.month)
 
     def Update(self):
+        if self.state == self.state_dic['koikoi']:
+            if not self.decks[self.player].rules.IsNotIdle():
+                self.ToIdleState()
         if self.selected_card != None:
             num = len(self.matched_cards)
             # if self.state != self.state_dic['match']:
