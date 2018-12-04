@@ -183,7 +183,7 @@ while True:
  
     screen.fill(pygame.Color('yellow'))
     # panel = YesNoPanel(font, u'こいこいしますか？', u'はい', u'いいえ')
-    panel = TextPanel(font, [u'こいこいしますか？', u'はい', u'いいえ'])
+    panel = TextPanel(font, [u'こいこいしますか？', '', '', ''])
     panel.set_center([300, 300])
     panel.ProcessInput(events, None)
     panel.Render(screen)

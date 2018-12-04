@@ -24,11 +24,12 @@ MIDDLE_SPACING = 20
 WINDOW_SIZE_X = BOARDER * 2 + (CARD_SPACING + CARD_WIDTH) * 8 - CARD_SPACING + DECK_WIDTH
 WINDOW_SIZE_Y = 4 * CARD_HEIGHT + 4 * MIDDLE_SPACING
 WINDOW_SIZE = (WINDOW_SIZE_X, WINDOW_SIZE_Y)
+WINDOW_CENTER = [WINDOW_SIZE_X / 2, WINDOW_SIZE_Y / 2]
 WINDOW_RECT = pygame.Rect(0, 0, WINDOW_SIZE_X, WINDOW_SIZE_Y)
 UP_CARD_POS = [[BOARDER + i * (CARD_SPACING + CARD_WIDTH), BOARDER] for i in range(0, 8)]
 DOWN_CARD_POS = [[p[0], WINDOW_SIZE_Y - BOARDER - CARD_HEIGHT] for p in UP_CARD_POS]
 MIDDLE_BUFFER = MIDDLE_SPACING + CARD_HEIGHT
-POOL_WIDTH = 7
+POOL_WIDTH = 8
 MIDDLE_CARD_X = [BOARDER + (i + 1) * (MIDDLE_SPACING + CARD_WIDTH) for i in range(0, POOL_WIDTH)]
 MIDDLE_CARD_POS = [[x, BOARDER + i * MIDDLE_BUFFER] for x in MIDDLE_CARD_X for i in range(1, 3)]
 CARD_POS = UP_CARD_POS + DOWN_CARD_POS + MIDDLE_CARD_POS[:8]
@@ -133,8 +134,18 @@ class TextPanel:
             y = self.topleft[1] + self.boarder + self.text_height / 2 + (self.text_height + self.spacing) * idx
             rect.center = [pos[0], y]
 
+    def Collide(self, pos):
+        return (pos[0] >= self.topleft[0] and
+                pos[0] <= self.topleft[0] + self.width and
+                pos[1] >= self.topleft[1] and
+                pos[1] <= self.topleft[1] + self.height)
+
     def ProcessInput(self, events, pressed_keys):
-        pass
+        for event in events:
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                pos = pygame.mouse.get_pos()
+                return self.Collide(pos)
+        return None
 
     def Update(self):
         pass
@@ -263,6 +274,7 @@ class Rules:
         self.tane_lim = 5
         self.tan_lim = 5
         self.month = month
+        # self.record_names = [pattern[0] for pattern in self.patterns] + ['kou', 'kasu', 'tane', 'tan']
         self.records = {}
         self.new_patterns = []
         self.window_size = [7 * CARD_WIDTH, 1.5 * CARD_HEIGHT]
@@ -270,7 +282,7 @@ class Rules:
         self.window_pos_y = (WINDOW_SIZE_Y - self.window_size[1]) / 2
         self.window_pos = [self.window_pos_x, self.window_pos_y] 
         self.font = pygame.font.Font("KosugiMaru-Regular.ttf", 40)
-        self.state_dic = {'idle':0, 'pump':1, 'koikoi':2}
+        self.state_dic = {'idle':0, 'pump':1, 'koikoi':2, 'score':3}
         self.state = self.state_dic['idle'] 
         self.text = ''
         self.pump_idx = 0
@@ -281,6 +293,7 @@ class Rules:
                                        u'はい', u'いいえ', self.color,
                                        self.back_color)
         self.koikoi_panel.set_center([WINDOW_SIZE_X / 2, WINDOW_SIZE_Y / 2])
+        self.score_panel = None
 
     def IsNotIdle(self):
         return self.state != self.state_dic['idle']
@@ -312,14 +325,14 @@ class Rules:
                         cards = cards + cards_prop[idx][:i]
                     new_patterns.append(pattern[:-1] + [cards])
         # for kou in self.kous:
-            # if (in_arr > pattern[2]).all():
-                # name = 'kou'
-                # if self.Check(pattern[:-1], name):
-                    # new_pattern = True
-                    # cards = []
-                    # for idx, i in pattern[2]:
-                        # cards.append(cards_prop[idx][:i])
-                    # new_patterns.append(pattern[:-1])
+        # if (in_arr > pattern[2]).all():
+        # name = 'kou'
+        # if self.Check(pattern[:-1], name):
+        # new_pattern = True
+        # cards = []
+        # for idx, i in pattern[2]:
+        # cards.append(cards_prop[idx][:i])
+        # new_patterns.append(pattern[:-1])
         name_lists = [['kasu', u'カス'], ['tane', u'タネ'], ['tan', u'短冊']]
         lims = [self.kasu_lim, self.tane_lim, self.tan_lim]
         for name_list, lim in zip(name_lists, lims):
@@ -354,8 +367,15 @@ class Rules:
             if Res == True:
                 self.state = self.state_dic['idle']
             elif Res == False:
-                #point evaluation stage
-                pass
+                self.state = self.state_dic['score']
+                self.UpdateScorePanel()
+                print('score panel is updated')
+        elif self.state == self.state_dic['score']:
+            # print('now in state score')
+            Res = self.score_panel.ProcessInput(events, pressed_keys)
+            if Res == True:
+                self.state = self.state_dic['idle']
+                return True
         else:
             for event in events:
                 if event.type == pygame.MOUSEBUTTONDOWN:
@@ -370,14 +390,38 @@ class Rules:
                             self.state = self.state_dic['koikoi']
                             print('the state is now koikoi')
                             # self.state = self.state_dic['idle']
-                        
+        return False
+
+    def UpdateScorePanel(self):
+        texts = []
+        text_num = 8
+        total_point = 0
+        tlen = 6
+        for idx_name in self.records:
+            record = self.records.get(idx_name)
+            if record != None:
+                name = record[0]
+                val = record[1]
+                spacing = ''.join(u'　' for i in range(0, tlen - len(name)))
+                point = str(val) + '文'
+                texts.append(name + spacing + point)
+                total_point = total_point + val
+        print(record)
+        print('number of scored patterns are %d' % len(texts))
+        texts = texts + ['' for i in range(0, 8 - len(texts))]
+        point_str = str(total_point)
+        texts.append(u'合計' + 
+                     ''.join(u'　' for i in range(0, tlen - len(point_str))) + 
+                     point_str + '文')
+        self.score_panel = TextPanel(self.font, texts, self.color, self.back_color)
+        self.score_panel.set_center(WINDOW_CENTER)
 
     def Update(self):
         pass
-        # if self.new_patterns != [] and self.state == self.state_dic['idle']:
-            # print('change to state pump!')
-            # self.state = self.state_dic['pump']
-            # self.pump_idx = 0
+    # if self.new_patterns != [] and self.state == self.state_dic['idle']:
+    # print('change to state pump!')
+    # self.state = self.state_dic['pump']
+    # self.pump_idx = 0
 
     def PumpRender(self, screen):
         pygame.draw.rect(screen, BLACK, self.window_pos + self.window_size)
@@ -405,23 +449,25 @@ class Rules:
             self.PumpRender(screen)
         elif self.state == self.state_dic['koikoi']:
             self.koikoi_panel.Render(screen)
+        elif self.state == self.state_dic['score']:
+            self.score_panel.Render(screen)
 
 _image_library = {}
 def get_image(path):
-        global _image_library
-        image = _image_library.get(path)
-        if image == None:
-                canonicalized_path = path.replace('/', os.sep).replace('\\', os.sep)
-                image = pygame.image.load(canonicalized_path)
-                image = pygame.transform.scale(image, FIG_SIZE)
-                _image_library[path] = image
-        return image
+    global _image_library
+    image = _image_library.get(path)
+    if image == None:
+        canonicalized_path = path.replace('/', os.sep).replace('\\', os.sep)
+        image = pygame.image.load(canonicalized_path)
+        image = pygame.transform.scale(image, FIG_SIZE)
+        _image_library[path] = image
+    return image
 
 class Card:
     def __init__(self, content, pos):
         self.month = content[0]
         self.order = content[1]
-        self.image = get_image(str(content[0]) + '_' + str(content[1]) + '.png')
+        self.image = get_image('images/' + str(content[0]) + '_' + str(content[1]) + '.png')
         self.pos = pos
         self.fig_pos = self.get_fig_pos(pos)
         self.move = False
@@ -446,9 +492,9 @@ class Card:
 
     def Collide(self, pos):
         return (pos[0] >= self.pos[0] 
-            and pos[0] <= self.pos[0] + CARD_WIDTH
-            and pos[1] >= self.pos[1]
-            and pos[1] <= self.pos[1] + CARD_HEIGHT)
+                and pos[0] <= self.pos[0] + CARD_WIDTH
+                and pos[1] >= self.pos[1]
+                and pos[1] <= self.pos[1] + CARD_HEIGHT)
 
     def ProcessInput(self, events, pressed_keys):
         for event in events:
@@ -516,7 +562,7 @@ class Deck:
 
     def ProcessInput(self, events, pressed_keys):
         if self.rules.IsNotIdle():
-            self.rules.ProcessInput(events, pressed_keys)
+            return self.rules.ProcessInput(events, pressed_keys)
         else:
             for card in self.cards:
                 selected_card = card.ProcessInput(events, pressed_keys)
@@ -649,6 +695,11 @@ class Round:
                 if pool_selected_card != None:
                     print('get selected card in pool')
                     self.matched_cards = [pool_selected_card]
+        elif self.state == self.state_dic['koikoi']:
+            deck = self.decks[self.player]
+            val = deck.ProcessInput(filtered_events, pressed_keys)
+            if val == True:
+                self.next = Round(self.month % 12 + 1)
         else:
             selected_card = None
             if self.state == self.state_dic['idle'] or self.state == self.state_dic['koikoi']:
@@ -812,6 +863,8 @@ class Round:
             card.Render(screen)
         for deck in self.decks:
             deck.Render(screen)
+        for deck in self.decks:
+            deck.rules.Render(screen)
         if self.selected_card != None:
             self.selected_card.Render(screen)
 
