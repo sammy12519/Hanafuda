@@ -262,7 +262,7 @@ class YesNoPanel:
 
 #scoring rules
 class Rules:
-    def __init__(self, month):
+    def __init__(self, month, oya):
         self.patterns = [[u'猪鹿蝶', 5, property_array([prop_dic['tane_ani']] * 3)],
                          [u'赤短', 6, property_array([prop_dic['tan_r']] * 3)],
                          [u'青短', 6, property_array([prop_dic['tan_b']] * 3)]]
@@ -274,11 +274,12 @@ class Rules:
         self.tane_lim = 5
         self.tan_lim = 5
         self.month = month
+        self.oya = oya
         print('in Rules, month is %d' % month)
         # self.record_names = [pattern[0] for pattern in self.patterns] + ['kou', 'kasu', 'tane', 'tan']
         self.records = {}
         self.new_patterns = []
-        self.window_size = [7 * CARD_WIDTH, 1.5 * CARD_HEIGHT]
+        self.window_size = [6 * CARD_WIDTH, 1.5 * CARD_HEIGHT]
         self.window_pos_x = (WINDOW_SIZE_X - self.window_size[0]) / 2
         self.window_pos_y = (WINDOW_SIZE_Y - self.window_size[1]) / 2
         self.window_pos = [self.window_pos_x, self.window_pos_y] 
@@ -296,6 +297,7 @@ class Rules:
         self.koikoi_panel.set_center([WINDOW_SIZE_X / 2, WINDOW_SIZE_Y / 2])
         self.score_panel = None
         self.total_point = 0
+        self.card_num = DECK_SIZE
 
     def IsNotIdle(self):
         return self.state != self.state_dic['idle']
@@ -311,6 +313,20 @@ class Rules:
                 self.records[name] = pattern
                 return True
         return False
+
+    def ToScoreState(self):
+        self.UpdateScorePanel()
+        self.state = self.state_dic['score']
+    
+    def Oyaken(self):
+        text = u'親権'
+        val = 6
+        pattern = [text, val, None]
+        self.new_patterns = [pattern]
+        self.records[text] = pattern
+        if self.state == self.state_dic['idle']:
+            print('change to state score!')
+            self.ToScoreState()
 
     def CheckPatterns(self, in_arr, cards_prop):
         new_pattern = False
@@ -343,12 +359,16 @@ class Rules:
         name = u'月札'
         val = 4
         count = 0
+        recorded_order = []
         dis_cards = []
         for cards in cards_prop:
             for card in cards:
                 if card.month == self.month:
-                    count = count + 1
-                    dis_cards.append(card)
+                    if card.order not in recorded_order:
+                        recorded_order.append(card.order)
+                        count = count + 1
+                        dis_cards.append(card)
+        print('month card count : ' + str(count))
         if count == 4:
             pattern = [name, val]
             if self.Check(pattern, name):
@@ -359,7 +379,10 @@ class Rules:
             self.new_patterns = new_patterns
             if self.new_patterns != [] and self.state == self.state_dic['idle']:
                 print('change to state pump!')
-                self.state = self.state_dic['pump']
+                if self.card_num == 0:
+                    self.ToScoreState()
+                else:
+                    self.state = self.state_dic['pump']
                 self.pump_idx = 0
         return new_pattern
 
@@ -415,6 +438,7 @@ class Rules:
                 texts.append(name + spacing + point)
                 total_point = total_point + val
         print(record)
+        print('now is in state %d' % self.state)
         print('number of scored patterns are %d' % len(texts))
         texts = texts + ['' for i in range(0, 8 - len(texts))]
         point_str = str(total_point)
@@ -425,8 +449,8 @@ class Rules:
         self.score_panel = TextPanel(self.font, texts, self.color, self.back_color)
         self.score_panel.set_center(WINDOW_CENTER)
 
-    def Update(self):
-        pass
+    def Update(self, card_num):
+        self.card_num = card_num
     # if self.new_patterns != [] and self.state == self.state_dic['idle']:
     # print('change to state pump!')
     # self.state = self.state_dic['pump']
@@ -444,9 +468,10 @@ class Rules:
         center_y = self.window_pos_y + self.window_size[1] / 2
         left = text_panel_x + text_panel.width / 2 + self.boarder + CARD_WIDTH / 2 + CARD_BOARDER
         right = self.window_pos_x + self.window_size[0] - self.boarder - CARD_WIDTH / 2 - CARD_BOARDER
-        center_x = np.linspace(left, right, len(pattern[2])) 
-        for x, card in zip(center_x, pattern[2]):
-            card.Draw(screen, [x, center_y], location = 'center')
+        if pattern[2] != None: #Is Oyaken
+            center_x = np.linspace(left, right, len(pattern[2])) 
+            for x, card in zip(center_x, pattern[2]):
+                card.Draw(screen, [x, center_y], location = 'center')
         # text_center_x = int(self.window_pos_x + BOARDER + text_rect.width / 2)
         # text_center_y = int(self.window_pos_y + self.window_size[1] / 2)
         # text_rect.center = [text_center_x, text_center_y]
@@ -549,8 +574,10 @@ class Card:
         self.Draw(screen, self.pos)
 
 class Deck:
-    def __init__(self, card_list, y, month):
-        self.rules = Rules(month)
+    def __init__(self, card_list, y, month, oya, player):
+        self.oya = oya
+        self.player = player
+        self.rules = Rules(month, oya)
         self.cards = card_list
         for card in self.cards:
             card.parent = self.cards
@@ -629,7 +656,7 @@ class Deck:
                 move = move or card.move
         if not move:
             self.ScoredCardUpdate()
-        self.rules.Update()
+        self.rules.Update(len(self.cards))
 
     def Render(self, screen):
         for card in self.cards:
@@ -697,6 +724,7 @@ class Round:
         self.scores = scores
         cards = []
         self.player = self.oya
+        self.last_scored_player = None
         #rest settings
         self.rest_max_size = len(card_contents) - 2 * DECK_SIZE - POOL_SIZE
         self.card_depth = 1
@@ -717,9 +745,9 @@ class Round:
         center = [WINDOW_SIZE_X - BOARDER - 2 * CARD_WIDTH, WINDOW_SIZE_Y / 2]
         self.month_panel = MonthPanel(month, oya, scores, cards, center)
         corner_x = WINDOW_SIZE_X - CARD_WIDTH - BOARDER
-        top_deck = Deck(cards[:DECK_SIZE], BOARDER, month)
+        top_deck = Deck(cards[:DECK_SIZE], BOARDER, month, oya, 0)
         bot_y = WINDOW_SIZE_Y - CARD_HEIGHT - BOARDER
-        bot_deck = Deck(cards[DECK_SIZE:2 * DECK_SIZE], bot_y, month)
+        bot_deck = Deck(cards[DECK_SIZE:2 * DECK_SIZE], bot_y, month, oya, 1)
         self.decks = [top_deck, bot_deck]
         self.pool = []
         for idx, card in enumerate(cards[2 * DECK_SIZE:2 * DECK_SIZE + POOL_SIZE]):
@@ -774,8 +802,11 @@ class Round:
                 self.state = self.state_dic['end']
         else:
             selected_card = None
-            if self.state == self.state_dic['idle'] or self.state == self.state_dic['koikoi']:
+            if self.state == self.state_dic['idle']:
                 deck = self.decks[self.player]
+                selected_card = deck.ProcessInput(filtered_events, pressed_keys)
+            elif self.state == self.state_dic['koikoi']:
+                deck = self.decks[self.last_scored_player]
                 selected_card = deck.ProcessInput(filtered_events, pressed_keys)
             if selected_card != None:
                 self.selected_card = selected_card
@@ -833,6 +864,7 @@ class Round:
         deck = self.decks[self.player]
         if self.state != self.state_dic['koikoi'] and deck.CheckPatterns():
             print('change to state koikoi and now player is %d' % self.player)
+            self.last_scored_player = self.player
             self.state = self.state_dic['koikoi']
         else:
             self.state = self.state_dic['idle']
@@ -870,6 +902,19 @@ class Round:
                 self.selected_card = self.rest[0]
                 self.matched_cards = self.CheckPool(self.selected_card.month)
 
+    def CheckEmptyDecks(self):
+        l = 0
+        for deck in self.decks:
+            l = l + len(deck.cards)
+        if l == 0:
+            if self.last_scored_player == None:
+                print('oyaken!!')
+                self.decks[self.oya].rules.Oyaken()
+            else:
+                print('last scored player would score')
+                self.decks[self.last_scored_player].rules.ToScoreState()
+            self.state = self.state_dic['koikoi']
+
     def Update(self):
         if self.state == self.state_dic['koikoi']:
             rules = self.decks[self.player].rules
@@ -904,6 +949,8 @@ class Round:
         for card in self.pool:
             card.Update(None)
         self.RestUpdate()
+        if self.state == self.state_dic['idle']:
+            self.CheckEmptyDecks()
 
     def RestDrawPolygon(self, pos_list, num):
         dy = self.card_depth
