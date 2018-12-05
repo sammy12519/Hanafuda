@@ -274,6 +274,7 @@ class Rules:
         self.tane_lim = 5
         self.tan_lim = 5
         self.month = month
+        print('in Rules, month is %d' % month)
         # self.record_names = [pattern[0] for pattern in self.patterns] + ['kou', 'kasu', 'tane', 'tan']
         self.records = {}
         self.new_patterns = []
@@ -282,7 +283,7 @@ class Rules:
         self.window_pos_y = (WINDOW_SIZE_Y - self.window_size[1]) / 2
         self.window_pos = [self.window_pos_x, self.window_pos_y] 
         self.font = pygame.font.Font("KosugiMaru-Regular.ttf", 40)
-        self.state_dic = {'idle':0, 'pump':1, 'koikoi':2, 'score':3}
+        self.state_dic = {'idle':0, 'pump':1, 'koikoi':2, 'score':3, 'end':4}
         self.state = self.state_dic['idle'] 
         self.text = ''
         self.pump_idx = 0
@@ -294,6 +295,7 @@ class Rules:
                                        self.back_color)
         self.koikoi_panel.set_center([WINDOW_SIZE_X / 2, WINDOW_SIZE_Y / 2])
         self.score_panel = None
+        self.total_point = 0
 
     def IsNotIdle(self):
         return self.state != self.state_dic['idle']
@@ -324,15 +326,6 @@ class Rules:
                     for idx, i in enumerate(pattern[2]):
                         cards = cards + cards_prop[idx][:i]
                     new_patterns.append(pattern[:-1] + [cards])
-        # for kou in self.kous:
-        # if (in_arr > pattern[2]).all():
-        # name = 'kou'
-        # if self.Check(pattern[:-1], name):
-        # new_pattern = True
-        # cards = []
-        # for idx, i in pattern[2]:
-        # cards.append(cards_prop[idx][:i])
-        # new_patterns.append(pattern[:-1])
         name_lists = [['kasu', u'カス'], ['tane', u'タネ'], ['tan', u'短冊']]
         lims = [self.kasu_lim, self.tane_lim, self.tan_lim]
         for name_list, lim in zip(name_lists, lims):
@@ -347,6 +340,21 @@ class Rules:
                     new_pattern = True
                     cards = cards_prop[idx]
                     new_patterns.append(pattern + [cards])
+        name = u'月札'
+        val = 4
+        count = 0
+        dis_cards = []
+        for cards in cards_prop:
+            for card in cards:
+                if card.month == self.month:
+                    count = count + 1
+                    dis_cards.append(card)
+        if count == 4:
+            pattern = [name, val]
+            if self.Check(pattern, name):
+                new_pattern = True
+                cards = cards_prop[idx]
+                new_patterns.append(pattern + [dis_cards])
         if new_pattern:
             self.new_patterns = new_patterns
             if self.new_patterns != [] and self.state == self.state_dic['idle']:
@@ -374,7 +382,7 @@ class Rules:
             # print('now in state score')
             Res = self.score_panel.ProcessInput(events, pressed_keys)
             if Res == True:
-                self.state = self.state_dic['idle']
+                self.state = self.state_dic['end']
                 return True
         else:
             for event in events:
@@ -410,6 +418,7 @@ class Rules:
         print('number of scored patterns are %d' % len(texts))
         texts = texts + ['' for i in range(0, 8 - len(texts))]
         point_str = str(total_point)
+        self.total_point = total_point
         texts.append(u'合計' + 
                      ''.join(u'　' for i in range(0, tlen - len(point_str))) + 
                      point_str + '文')
@@ -561,7 +570,7 @@ class Deck:
         self.type_spacing = 10
 
     def ProcessInput(self, events, pressed_keys):
-        if self.rules.IsNotIdle():
+        if self.rules.IsNotIdle() and self.rules.state != self.rules.state_dic['end']:
             return self.rules.ProcessInput(events, pressed_keys)
         else:
             for card in self.cards:
@@ -629,14 +638,65 @@ class Deck:
             card.Render(screen)
         self.rules.Render(screen)
 
+class MonthPanel:
+    def __init__(self, month, oya, scores, cards, center, color = WHITE,
+                 back_color = BLACK):
+        self.font = pygame.font.Font("KosugiMaru-Regular.ttf", 40)
+        self.card = None
+        for card in cards:
+            if card.month == month and card.order == 4:
+                self.card = card
+        if self.card == None:
+            print('Err: No month card representation exits')
+        self.oya = oya
+        self.center = center
+        self.color = color
+        self.back_color = back_color
+        self.text = u'月札'
+        self.texts = [self.text]
+        for idx, score in enumerate(scores):
+            text = ''
+            if idx == self.oya:
+                text = u'親'
+            else:
+                text = u'子'
+            self.texts.append(text + u'　' + str(score) + u'文')    
+        self.surfs = []
+        self.rects = []
+        self.text_height = 0
+        for text in self.texts:
+            surf, rect = get_surf(self.font, text, color)
+            self.surfs.append(surf)
+            self.rects.append(rect)
+            self.text_height = rect.height
+        self.boarder = 10
+        self.height = 2 * self.boarder + 5 * self.text_height + self.card.card_height
+        self.width = 1.5 * self.card.card_width + 2 * self.boarder
+        self.size = [self.width, self.height]
+    
+    def Render(self, screen):
+        rect = pygame.Rect([0, 0] + self.size)
+        rect.center = self.center
+        pygame.draw.rect(screen, self.back_color, rect)
+        y = self.center[1] - self.height / 2 + self.text_height + self.boarder 
+        self.rects[1].center = [self.center[0], y]
+        y = y + self.text_height + self.card.card_height / 2
+        self.card.Draw(screen, [self.center[0], y], location = 'center')
+        y = y + self.card.card_height / 2 + self.text_height / 2
+        self.rects[0].center = [self.center[0], y]
+        self.rects[2].center = [self.center[0], y + 1.5 * self.text_height] 
+        for surf, rect in zip(self.surfs, self.rects):
+            screen.blit(surf, rect)
 
 class Round:
-    def __init__(self, month):
+    def __init__(self, month, oya, scores):
         random.shuffle(card_contents)
         self.next = self
         self.month = month
+        self.oya = oya
+        self.scores = scores
         cards = []
-        self.player = 1
+        self.player = self.oya
         #rest settings
         self.rest_max_size = len(card_contents) - 2 * DECK_SIZE - POOL_SIZE
         self.card_depth = 1
@@ -654,6 +714,8 @@ class Round:
             content = card_contents[idx]
             card = Card(content, pos)
             cards.append(card)
+        center = [WINDOW_SIZE_X - BOARDER - 2 * CARD_WIDTH, WINDOW_SIZE_Y / 2]
+        self.month_panel = MonthPanel(month, oya, scores, cards, center)
         corner_x = WINDOW_SIZE_X - CARD_WIDTH - BOARDER
         top_deck = Deck(cards[:DECK_SIZE], BOARDER, month)
         bot_y = WINDOW_SIZE_Y - CARD_HEIGHT - BOARDER
@@ -670,7 +732,7 @@ class Round:
         for card in self.rest:
             card.parent = self.rest
         self.matched_cards = None
-        self.state_dic = {'idle':0, 'match':1, 'second':2, 'match_second':3, 'koikoi':4}
+        self.state_dic = {'idle':0, 'match':1, 'second':2, 'match_second':3, 'koikoi':4, 'end':5}
         self.state = self.state_dic['idle']
         self.second_flip_state = False
         self.selected_card = None
@@ -681,12 +743,21 @@ class Round:
     def in_match_state(self):
         return self.state == self.state_dic['match'] \
             or self.state == self.state_dic['match_second']
+    
+    def IsEnd(self):
+        return self.state == self.state_dic['end']
+
+    def GetScore(self):
+        if self.state == self.state_dic['end']:
+            return self.decks[self.player].rules.total_point
+        else:
+            print('access score not in end state!')
 
     def ProcessInput(self, events, pressed_keys):
         filtered_events = []
         for event in events:
             if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
-                self.next = Round(self.month % 12 + 1)
+                pass
             else:
                 filtered_events.append(event)
         if self.in_match_state():
@@ -699,7 +770,8 @@ class Round:
             deck = self.decks[self.player]
             val = deck.ProcessInput(filtered_events, pressed_keys)
             if val == True:
-                self.next = Round(self.month % 12 + 1)
+                print('Go to end state in Round')
+                self.state = self.state_dic['end']
         else:
             selected_card = None
             if self.state == self.state_dic['idle'] or self.state == self.state_dic['koikoi']:
@@ -800,7 +872,10 @@ class Round:
 
     def Update(self):
         if self.state == self.state_dic['koikoi']:
-            if not self.decks[self.player].rules.IsNotIdle():
+            rules = self.decks[self.player].rules
+            if rules.state == rules.state_dic['end']:
+                self.state = self.state_dic['end']
+            elif rules.state == rules.state_dic['idle']:
                 self.ToIdleState()
         if self.selected_card != None:
             num = len(self.matched_cards)
@@ -867,13 +942,44 @@ class Round:
             deck.rules.Render(screen)
         if self.selected_card != None:
             self.selected_card.Render(screen)
+        self.month_panel.Render(screen)
 
     def Terminate(self):
         self.next = None
 
-# class Game:
-    # def __init__(self):
-        # self.rounds = Round()
+class Game:
+    def __init__(self):
+        self.next = self
+        self.month = 1
+        self.scores = [0, 0]
+        self.oya = 1
+        self.temp_round = Round(self.month, self.oya, self.scores)
+        
+    def ProcessInput(self, events, pressed_keys):
+        filtered_events = []
+        for event in events:
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
+                print('next round is called in Game')
+                self.next = Game()
+            else:
+                filtered_events.append(event)
+        self.temp_round.ProcessInput(filtered_events, pressed_keys)
+
+    def Update(self):
+        self.temp_round.Update()
+        if self.temp_round.IsEnd():
+            print('Round is ended in Game')
+            player = self.temp_round.player
+            self.scores[player] = self.scores[player] + self.temp_round.GetScore()
+            print('scores : ' + str(self.scores))
+            self.month = self.month % 12 + 1
+            self.temp_round = Round(self.month, self.oya, self.scores)
+
+    def Render(self, screen):
+        self.temp_round.Render(screen)
+
+    def Terminate(self):
+        self.next = None
 
 def run_game(width, height, fps, starting_scene):
     pygame.init()
@@ -900,6 +1006,7 @@ def run_game(width, height, fps, starting_scene):
                     quit_attempt = True
             
             if quit_attempt:
+                pass
                 active_scene.Terminate()
             else:
                 filtered_events.append(event)
@@ -913,4 +1020,4 @@ def run_game(width, height, fps, starting_scene):
         pygame.display.flip()
         clock.tick(fps)
 
-run_game(WINDOW_SIZE_X, WINDOW_SIZE_Y, 60, Round(12))
+run_game(WINDOW_SIZE_X, WINDOW_SIZE_Y, 60, Game())
