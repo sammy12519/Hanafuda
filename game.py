@@ -593,8 +593,35 @@ class Card:
     def Render(self, screen):
         self.Draw(screen, self.pos)
 
+class SimpleAgent:
+    def __init__(self, deck):
+        print('simple agent is initialized')
+        self.deck = deck
+        self.cards = deck.cards
+        self.pool = deck.pool
+        self.opp_score = deck.opponent_scored
+        self.state_dic = {'idle':0, 'actioned':1, 'match':2, 'koikoi':3}
+        self.state = self.state_dic['idle']
+
+    def Action(self, cards = None, koikoi = False):
+        print('Simple agent is actioning')
+        if cards == None:
+            card_idx = 0
+            return self.cards[card_idx]
+        elif koikoi:
+            return False 
+        else:
+            return cards[0]
+        
+    def Update(self, deck):
+        pass
+
+class HumanAgent:
+    def __init__(self, deck):
+        self.deck = deck
+
 class Deck:
-    def __init__(self, card_list, y, month, oya, player):
+    def __init__(self, card_list, y, month, oya, player, agent_type = 'Human'):
         self.oya = oya
         self.player = player
         self.rules = Rules(month, oya)
@@ -615,16 +642,31 @@ class Deck:
         self.overlap_ratio = 1 / 3
         self.overlap = int(self.overlap_ratio * CARD_WIDTH)
         self.type_spacing = 10
+        self.agent_type = agent_type
+        self.agent = self.SetAgent(agent_type)
+
+    def IsHuman(self):
+        return self.agent_type == 'Human'
+    
+    def SetAgent(self, agent_type):
+        if self.IsHuman():
+            return HumanAgent(self)
+        else:
+            return SimpleAgent(self)
 
     def ProcessInput(self, events, pressed_keys):
         if self.rules.IsNotIdle() and self.rules.state != self.rules.state_dic['end']:
             return self.rules.ProcessInput(events, pressed_keys)
         else:
-            for card in self.cards:
-                selected_card = card.ProcessInput(events, pressed_keys)
-                if selected_card != None:
-                    print('deck get selected card!')
-                    return selected_card
+            if self.IsHuman():
+                for card in self.cards:
+                    selected_card = card.ProcessInput(events, pressed_keys)
+                    if selected_card != None:
+                        print('deck get selected card!')
+                        return selected_card
+            else:
+                selected_card = self.agent.Action()
+                return selected_card
         return None
 
     def CheckPatterns(self):
@@ -736,7 +778,7 @@ class MonthPanel:
             screen.blit(surf, rect)
 
 class Round:
-    def __init__(self, month, oya, scores):
+    def __init__(self, month, oya, scores, agent_types):
         random.shuffle(card_contents)
         self.next = self
         self.month = month
@@ -765,10 +807,12 @@ class Round:
         center = [WINDOW_WIDTH - BOARDER - 2 * CARD_WIDTH, WINDOW_HEIGHT / 2]
         self.month_panel = MonthPanel(month, oya, scores, cards, center)
         corner_x = WINDOW_WIDTH - CARD_WIDTH - BOARDER
-        top_deck = Deck(cards[:DECK_SIZE], BOARDER, month, oya, 0)
+        self.agent_types = agent_types
+        top_deck = Deck(cards[:DECK_SIZE], BOARDER, month, oya, 0, agent_types[0])
         bot_y = WINDOW_HEIGHT - CARD_HEIGHT - BOARDER
-        bot_deck = Deck(cards[DECK_SIZE:2 * DECK_SIZE], bot_y, month, oya, 1)
+        bot_deck = Deck(cards[DECK_SIZE:2 * DECK_SIZE], bot_y, month, oya, 1, agent_types[1])
         self.decks = [top_deck, bot_deck]
+        self.agents = [deck.agent for deck in self.decks]
         self.pool = []
         for idx, card in enumerate(cards[2 * DECK_SIZE:2 * DECK_SIZE + POOL_SIZE]):
             card.in_pool_idx = idx
@@ -810,10 +854,14 @@ class Round:
                 filtered_events.append(event)
         if self.in_match_state():
             for card in self.matched_cards:
-                pool_selected_card = card.ProcessInput(filtered_events, pressed_keys)
-                if pool_selected_card != None:
-                    print('get selected card in pool')
-                    self.matched_cards = [pool_selected_card]
+                if self.decks[self.player].IsHuman():
+                    pool_selected_card = card.ProcessInput(filtered_events, pressed_keys)
+                    if pool_selected_card != None:
+                        print('get selected card in pool')
+                        self.matched_cards = [pool_selected_card]
+                else:
+                    card = self.agents[self.player].Action(self.matched_cards)
+                    self.matched_cards = [card]
         elif self.state == self.state_dic['koikoi']:
             deck = self.decks[self.player]
             val = deck.ProcessInput(filtered_events, pressed_keys)
@@ -1020,7 +1068,8 @@ class Game:
         self.month = 1
         self.scores = [0, 0]
         self.oya = 1
-        self.temp_round = Round(self.month, self.oya, self.scores)
+        self.agent_types = ['Simple', 'Human']
+        self.temp_round = Round(self.month, self.oya, self.scores, self.agent_types)
         
     def ProcessInput(self, events, pressed_keys):
         filtered_events = []
@@ -1040,7 +1089,7 @@ class Game:
             self.scores[player] = self.scores[player] + self.temp_round.GetScore()
             print('scores : ' + str(self.scores))
             self.month = self.month % 12 + 1
-            self.temp_round = Round(self.month, self.oya, self.scores)
+            self.temp_round = Round(self.month, self.oya, self.scores, self.agent_types)
 
     def Render(self, screen):
         self.temp_round.Render(screen)
