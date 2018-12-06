@@ -21,22 +21,42 @@ CARD_HEIGHT = 2 * CARD_BOARDER + FIG_HEIGHT
 CARD_SIZE = [CARD_WIDTH, CARD_HEIGHT]
 DECK_WIDTH = 600
 MIDDLE_SPACING = 20
-WINDOW_SIZE_X = BOARDER * 2 + (CARD_SPACING + CARD_WIDTH) * 8 - CARD_SPACING + DECK_WIDTH
-WINDOW_SIZE_Y = 4 * CARD_HEIGHT + 4 * MIDDLE_SPACING
-WINDOW_SIZE = (WINDOW_SIZE_X, WINDOW_SIZE_Y)
-WINDOW_CENTER = [WINDOW_SIZE_X / 2, WINDOW_SIZE_Y / 2]
-WINDOW_RECT = pygame.Rect(0, 0, WINDOW_SIZE_X, WINDOW_SIZE_Y)
+WINDOW_WIDTH = BOARDER * 2 + (CARD_SPACING + CARD_WIDTH) * 8 - CARD_SPACING + DECK_WIDTH
+WINDOW_HEIGHT = 4 * CARD_HEIGHT + 4 * MIDDLE_SPACING
+#Cautious: Really Dirty! Calculate the ratio and resize.
+(USER_WINDOW_WIDTH,USER_WINDOW_HEIGHT) = pygame.display.list_modes()[0]
+if USER_WINDOW_WIDTH < WINDOW_WIDTH and USER_WINDOW_HEIGHT < WINDOW_HEIGHT:
+    ratio_width = USER_WINDOW_WIDTH/WINDOW_WIDTH
+    ratio_height = USER_WINDOW_HEIGHT/WINDOW_HEIGHT
+    ratio = ratio_width if ratio_width < ratio_height else ratio_height
+    print('Exceed available width or height! Resizing with ratio {}...'.format(ratio))
+    BOARDER = int(10*ratio)
+    CARD_SPACING = int(5*ratio)
+    FIG_WIDTH = int((372 // 3)*ratio)
+    FIG_HEIGHT = int((587 // 3)*ratio)
+    FIG_SIZE = [FIG_WIDTH, FIG_HEIGHT]
+    CARD_BOARDER = int(5*ratio)
+    CARD_WIDTH = 2 * CARD_BOARDER + FIG_WIDTH
+    CARD_HEIGHT = 2 * CARD_BOARDER + FIG_HEIGHT
+    CARD_SIZE = [CARD_WIDTH, CARD_HEIGHT]
+    DECK_WIDTH = int(600*ratio)
+    MIDDLE_SPACING = int(20*ratio)
+    WINDOW_WIDTH = BOARDER * 2 + (CARD_SPACING + CARD_WIDTH) * 8 - CARD_SPACING + DECK_WIDTH
+    WINDOW_HEIGHT = 4 * CARD_HEIGHT + 4 * MIDDLE_SPACING
+WINDOW_SIZE = (WINDOW_WIDTH, WINDOW_HEIGHT)
+WINDOW_CENTER = [WINDOW_WIDTH / 2, WINDOW_HEIGHT / 2]
+WINDOW_RECT = pygame.Rect(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT)
 UP_CARD_POS = [[BOARDER + i * (CARD_SPACING + CARD_WIDTH), BOARDER] for i in range(0, 8)]
-DOWN_CARD_POS = [[p[0], WINDOW_SIZE_Y - BOARDER - CARD_HEIGHT] for p in UP_CARD_POS]
-MIDDLE_BUFFER = MIDDLE_SPACING + CARD_HEIGHT
+DOWN_CARD_POS = [[p[0], WINDOW_HEIGHT - BOARDER - CARD_HEIGHT] for p in UP_CARD_POS]
 POOL_WIDTH = 8
+MIDDLE_BUFFER = MIDDLE_SPACING + CARD_HEIGHT
 MIDDLE_CARD_X = [BOARDER + (i + 1) * (MIDDLE_SPACING + CARD_WIDTH) for i in range(0, POOL_WIDTH)]
 MIDDLE_CARD_POS = [[x, BOARDER + i * MIDDLE_BUFFER] for x in MIDDLE_CARD_X for i in range(1, 3)]
 CARD_POS = UP_CARD_POS + DOWN_CARD_POS + MIDDLE_CARD_POS[:8]
 DECK_SIZE = 8
 POOL_SIZE = 8
-
 COVER_BOARDER = 10
+
 
 #colors
 WHITE = [255, 255, 255]
@@ -48,7 +68,7 @@ BLUE = [0, 128, 255]
 CARD_CONTENTS = [[i, j] for i in range(1, 13) for j in range(1, 5)]
 card_contents = CARD_CONTENTS
 
-screen = pygame.display.set_mode((WINDOW_SIZE_X, WINDOW_SIZE_Y))
+screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
 done = False
 flag = True
 
@@ -56,7 +76,7 @@ flag = True
 MOVE_FRAME = 30
 
 #card properties
-prop_dic = {'kou':0, 'subkou':1, 'tane':2, 'tane_ani':3, 'tan':4, 'tan_r':5, 'tan_b':6, 'kasu':7}
+prop_dic = {'ko':0, 'subko':1, 'tane':2, 'tane_ani':3, 'tan':4, 'tan_r':5, 'tan_b':6, 'kas':7}
 PROP_DIC_LEN = 8
 def property_array(idx_list, num = PROP_DIC_LEN):
     v = np.zeros(num, dtype = int)
@@ -64,15 +84,15 @@ def property_array(idx_list, num = PROP_DIC_LEN):
         v[idx] = v[idx] + 1
     return v
 
-KOU = property_array([prop_dic['kou']])
-SUBKOU = property_array([prop_dic['subkou']])
+KOU = property_array([prop_dic['ko']])
+SUBKOU = property_array([prop_dic['subko']])
 TAN = property_array([prop_dic['tan']])
 TAN_R = property_array([prop_dic['tan'], prop_dic['tan_r']])
 TAN_B = property_array([prop_dic['tan'], prop_dic['tan_b']])
 TANE = property_array([prop_dic['tane']])
 TANE_ANI = property_array([prop_dic['tane'], prop_dic['tane_ani']])
-kasu = property_array([prop_dic['kasu']])
-KYOKU = property_array([prop_dic['kasu'], prop_dic['tane']])
+kasu = property_array([prop_dic['kas']])
+KYOKU = property_array([prop_dic['kas'], prop_dic['tane']])
 CARD_INFO= [[KOU, TAN_R, kasu, kasu],
             [TANE, TAN_R, kasu, kasu],
             [KOU, TAN_R, kasu, kasu],
@@ -88,12 +108,12 @@ CARD_INFO= [[KOU, TAN_R, kasu, kasu],
 
 def get_card_type(card):
     props = CARD_INFO[card.month - 1][card.order - 1]
-    name_order = ['kou', 'tane', 'tan', 'kasu']
+    name_order = ['ko', 'tane', 'tan', 'kas']
     for name in name_order:
         if props[prop_dic[name]] == 1:
             return name
-        elif props[prop_dic['subkou']] == 1:
-            return 'kou'
+        elif props[prop_dic['subko']] == 1:
+            return 'ko'
     print('Error: card %d %d has no type!' % (card.month, card.order))
     return None
 
@@ -263,25 +283,25 @@ class YesNoPanel:
 #scoring rules
 class Rules:
     def __init__(self, month, oya):
-        self.patterns = [[u'猪鹿蝶', 5, property_array([prop_dic['tane_ani']] * 3)],
-                         [u'赤短', 6, property_array([prop_dic['tan_r']] * 3)],
-                         [u'青短', 6, property_array([prop_dic['tan_b']] * 3)]]
-        self.kous = [[u'五光', 15, property_array([prop_dic['kou']] * 4 + [prop_dic['subkou']])],
-                     [u'雨四光', 8, property_array([prop_dic['kou']] * 3 + [prop_dic['subkou']])],
-                     [u'四光', 10, property_array([prop_dic['kou']] * 4)],
-                     [u'三光', 6, property_array([prop_dic['kou']] * 3)]]  
+        self.patterns = [['猪鹿蝶', 5, property_array([prop_dic['tane_ani']] * 3)],
+                         ['赤短', 6, property_array([prop_dic['tan_r']] * 3)],
+                         ['青短', 6, property_array([prop_dic['tan_b']] * 3)]]
+        self.kous = [['五光', 15, property_array([prop_dic['ko']] * 4 + [prop_dic['subko']])],
+                     ['雨四光', 8, property_array([prop_dic['ko']] * 3 + [prop_dic['subko']])],
+                     ['四光', 10, property_array([prop_dic['ko']] * 4)],
+                     ['三光', 6, property_array([prop_dic['ko']] * 3)]]  
         self.kasu_lim = 10
         self.tane_lim = 5
         self.tan_lim = 5
         self.month = month
         self.oya = oya
         print('in Rules, month is %d' % month)
-        # self.record_names = [pattern[0] for pattern in self.patterns] + ['kou', 'kasu', 'tane', 'tan']
+        # self.record_names = [pattern[0] for pattern in self.patterns] + ['ko', 'kas', 'tane', 'tan']
         self.records = {}
         self.new_patterns = []
         self.window_size = [6 * CARD_WIDTH, 1.5 * CARD_HEIGHT]
-        self.window_pos_x = (WINDOW_SIZE_X - self.window_size[0]) / 2
-        self.window_pos_y = (WINDOW_SIZE_Y - self.window_size[1]) / 2
+        self.window_pos_x = (WINDOW_WIDTH - self.window_size[0]) / 2
+        self.window_pos_y = (WINDOW_HEIGHT - self.window_size[1]) / 2
         self.window_pos = [self.window_pos_x, self.window_pos_y] 
         self.font = pygame.font.Font("KosugiMaru-Regular.ttf", 40)
         self.state_dic = {'idle':0, 'pump':1, 'koikoi':2, 'score':3, 'end':4}
@@ -291,10 +311,10 @@ class Rules:
         self.color = WHITE
         self.back_color = BLACK
         self.boarder = 10
-        self.koikoi_panel = YesNoPanel(self.font, u'こいこいしますか？',
-                                       u'はい', u'いいえ', self.color,
+        self.koikoi_panel = YesNoPanel(self.font, 'こいこいしますか？',
+                                       'はい', 'いいえ', self.color,
                                        self.back_color)
-        self.koikoi_panel.set_center([WINDOW_SIZE_X / 2, WINDOW_SIZE_Y / 2])
+        self.koikoi_panel.set_center([WINDOW_WIDTH / 2, WINDOW_HEIGHT / 2])
         self.score_panel = None
         self.total_point = 0
         self.card_num = DECK_SIZE
@@ -319,7 +339,7 @@ class Rules:
         self.state = self.state_dic['score']
     
     def Oyaken(self):
-        text = u'親権'
+        text = '親権'
         val = 6
         pattern = [text, val, None]
         self.new_patterns = [pattern]
@@ -332,7 +352,7 @@ class Rules:
         new_pattern = False
         new_patterns = []
         name_list = [pattern[0] for pattern in self.patterns]
-        name_list = name_list + ['kou'] * len(self.kous)
+        name_list = name_list + ['ko'] * len(self.kous)
         for name, pattern in zip(name_list, self.patterns + self.kous):
             if (in_arr >= pattern[2]).all():
                 if self.Check(pattern[:-1], name):
@@ -342,7 +362,7 @@ class Rules:
                     for idx, i in enumerate(pattern[2]):
                         cards = cards + cards_prop[idx][:i]
                     new_patterns.append(pattern[:-1] + [cards])
-        name_lists = [['kasu', u'カス'], ['tane', u'タネ'], ['tan', u'短冊']]
+        name_lists = [['kas', 'カス'], ['tane', 'タネ'], ['tan', '短冊']]
         lims = [self.kasu_lim, self.tane_lim, self.tan_lim]
         for name_list, lim in zip(name_lists, lims):
             idx_name = name_list[0]
@@ -356,7 +376,7 @@ class Rules:
                     new_pattern = True
                     cards = cards_prop[idx]
                     new_patterns.append(pattern + [cards])
-        name = u'月札'
+        name = '月札'
         val = 4
         count = 0
         recorded_order = []
@@ -433,7 +453,7 @@ class Rules:
             if record != None:
                 name = record[0]
                 val = record[1]
-                spacing = ''.join(u'　' for i in range(0, tlen - len(name)))
+                spacing = ''.join('　' for i in range(0, tlen - len(name)))
                 point = str(val) + '文'
                 texts.append(name + spacing + point)
                 total_point = total_point + val
@@ -443,8 +463,8 @@ class Rules:
         texts = texts + ['' for i in range(0, 8 - len(texts))]
         point_str = str(total_point)
         self.total_point = total_point
-        texts.append(u'合計' + 
-                     ''.join(u'　' for i in range(0, tlen - len(point_str))) + 
+        texts.append('合計' + 
+                     ''.join('　' for i in range(0, tlen - len(point_str))) + 
                      point_str + '文')
         self.score_panel = TextPanel(self.font, texts, self.color, self.back_color)
         self.score_panel.set_center(WINDOW_CENTER)
@@ -581,7 +601,7 @@ class Deck:
         self.cards = card_list
         for card in self.cards:
             card.parent = self.cards
-        self.score_dic = {'kou':0, 'tane':1, 'tan':2, 'kasu':3}
+        self.score_dic = {'ko':0, 'tane':1, 'tan':2, 'kas':3}
         self.scored_cards = [[] for i in range(0, len(self.score_dic))]
         self.scored_cards_render = []
         self.prop_arr = np.zeros(PROP_DIC_LEN, dtype=int)
@@ -590,7 +610,7 @@ class Deck:
         self.opponent_scored = None
         self.move = False
         self.deck_y = y
-        self.right_corner = [WINDOW_SIZE_X - BOARDER - CARD_WIDTH, y]
+        self.right_corner = [WINDOW_WIDTH - BOARDER - CARD_WIDTH, y]
         self.left_corner = [BOARDER, y]
         self.overlap_ratio = 1 / 3
         self.overlap = int(self.overlap_ratio * CARD_WIDTH)
@@ -679,15 +699,15 @@ class MonthPanel:
         self.center = center
         self.color = color
         self.back_color = back_color
-        self.text = u'月札'
+        self.text = '月札'
         self.texts = [self.text]
         for idx, score in enumerate(scores):
             text = ''
             if idx == self.oya:
-                text = u'親'
+                text = '親'
             else:
-                text = u'子'
-            self.texts.append(text + u'　' + str(score) + u'文')    
+                text = '子'
+            self.texts.append(text + '　' + str(score) + '文')    
         self.surfs = []
         self.rects = []
         self.text_height = 0
@@ -731,7 +751,7 @@ class Round:
         self.rest_angle = 20
         self.dy = self.card_depth
         self.dx = self.card_depth * np.tan(np.deg2rad(self.rest_angle))
-        self.rest_pos = [BOARDER, int((WINDOW_SIZE_Y - CARD_HEIGHT) / 2)]
+        self.rest_pos = [BOARDER, int((WINDOW_HEIGHT - CARD_HEIGHT) / 2)]
         for idx, content in enumerate(card_contents):
             if idx < len(CARD_POS):
                 pos = CARD_POS[idx]
@@ -742,11 +762,11 @@ class Round:
             content = card_contents[idx]
             card = Card(content, pos)
             cards.append(card)
-        center = [WINDOW_SIZE_X - BOARDER - 2 * CARD_WIDTH, WINDOW_SIZE_Y / 2]
+        center = [WINDOW_WIDTH - BOARDER - 2 * CARD_WIDTH, WINDOW_HEIGHT / 2]
         self.month_panel = MonthPanel(month, oya, scores, cards, center)
-        corner_x = WINDOW_SIZE_X - CARD_WIDTH - BOARDER
+        corner_x = WINDOW_WIDTH - CARD_WIDTH - BOARDER
         top_deck = Deck(cards[:DECK_SIZE], BOARDER, month, oya, 0)
-        bot_y = WINDOW_SIZE_Y - CARD_HEIGHT - BOARDER
+        bot_y = WINDOW_HEIGHT - CARD_HEIGHT - BOARDER
         bot_deck = Deck(cards[DECK_SIZE:2 * DECK_SIZE], bot_y, month, oya, 1)
         self.decks = [top_deck, bot_deck]
         self.pool = []
@@ -1067,4 +1087,4 @@ def run_game(width, height, fps, starting_scene):
         pygame.display.flip()
         clock.tick(fps)
 
-run_game(WINDOW_SIZE_X, WINDOW_SIZE_Y, 60, Game())
+run_game(WINDOW_WIDTH, WINDOW_HEIGHT, 60, Game())
