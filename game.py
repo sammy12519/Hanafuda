@@ -282,7 +282,8 @@ class YesNoPanel:
 
 #scoring rules
 class Rules:
-    def __init__(self, month, oya):
+    def __init__(self, month, oya, deck):
+        self.parent = deck
         self.patterns = [['猪鹿蝶', 5, property_array([prop_dic['tane_ani']] * 3)],
                          ['赤短', 6, property_array([prop_dic['tan_r']] * 3)],
                          ['青短', 6, property_array([prop_dic['tan_b']] * 3)]]
@@ -318,6 +319,8 @@ class Rules:
         self.score_panel = None
         self.total_point = 0
         self.card_num = DECK_SIZE
+        self.is_human = self.parent.IsHuman()
+        self.agent = self.parent.agent
 
     def IsNotIdle(self):
         return self.state != self.state_dic['idle']
@@ -414,7 +417,12 @@ class Rules:
 
     def ProcessInput(self, events, pressed_keys):
         if self.state == self.state_dic['koikoi']:
-            Res = self.koikoi_panel.ProcessInput(events, pressed_keys)
+            if self.is_human:
+                Res = self.koikoi_panel.ProcessInput(events, pressed_keys)
+            else:
+                print('Action with koikoi=True')
+                Res = self.agent.Action(koikoi=True)
+                print('Res: ' + str(Res))
             if Res == True:
                 self.state = self.state_dic['idle']
             elif Res == False:
@@ -604,17 +612,21 @@ class SimpleAgent:
         self.state = self.state_dic['idle']
 
     def Action(self, cards = None, koikoi = False):
-        print('Simple agent is actioning')
-        if cards == None:
-            card_idx = 0
-            return self.cards[card_idx]
-        elif koikoi:
-            return False 
+        if koikoi:
+            return self.KoiKoiAction()
+        elif cards == None:
+            return self.HandAction()
         else:
-            return cards[0]
-        
-    def Update(self, deck):
-        pass
+            return self.PoolAction(cards)
+    
+    def KoiKoiAction(self):
+        return False
+
+    def HandAction(self):
+        return self.cards[0] 
+
+    def PoolAction(self, cards):
+        return cards[0]
 
 class HumanAgent:
     def __init__(self, deck):
@@ -624,7 +636,6 @@ class Deck:
     def __init__(self, card_list, y, month, oya, player, agent_type = 'Human'):
         self.oya = oya
         self.player = player
-        self.rules = Rules(month, oya)
         self.cards = card_list
         for card in self.cards:
             card.parent = self.cards
@@ -644,6 +655,7 @@ class Deck:
         self.type_spacing = 10
         self.agent_type = agent_type
         self.agent = self.SetAgent(agent_type)
+        self.rules = Rules(month, oya, self)
 
     def IsHuman(self):
         return self.agent_type == 'Human'
