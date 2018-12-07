@@ -2,7 +2,7 @@ import random
 
 class BaseAgent:
     def __init__(self, deck):
-        print('base agent is initialized')
+        # print('base agent is initialized')
         self.deck = deck
         self.cards = deck.cards
         self.pool = deck.pool
@@ -47,10 +47,10 @@ class BaseAgent:
 class SimpleAgent(BaseAgent):
     def __init__(self, deck):
         BaseAgent.__init__(self, deck)
-        print('simple agent is initialized')
+        # print('simple agent is initialized')
 
     def Action(self, cards = None, koikoi = False):
-        self.PrintOppInfo()
+        # self.PrintOppInfo()
         if koikoi:
             return self.KoiKoiAction()
         elif cards == None:
@@ -62,6 +62,9 @@ class SimpleAgent(BaseAgent):
         return False
 
     def HandAction(self):
+        if len(self.cards) == 0:
+            # print('no cards on hand in Action !!!')
+            return 
         return self.cards[0] 
 
     def PoolAction(self, cards):
@@ -70,11 +73,11 @@ class SimpleAgent(BaseAgent):
 class RandomAgent(BaseAgent):
     def __init__(self, deck):
         BaseAgent.__init__(self, deck)
-        print('Random agent is initialized')
+        # print('Random agent is initialized')
         self.pool_card = None
 
     def Action(self, cards = None, koikoi = False):
-        self.PrintOppInfo()
+        # self.PrintOppInfo()
         if koikoi:
             return self.KoiKoiAction()
         elif cards == None:
@@ -86,6 +89,9 @@ class RandomAgent(BaseAgent):
         return False
 
     def HandAction(self):
+        if len(self.cards) == 0 or self.pool == None:
+            # print('no cards on hand in Action !!!')
+            return 
         matching = self.FindMatchCards()
         if len(matching) == 0:
             return random.choice(self.cards)

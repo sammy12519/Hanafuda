@@ -46,7 +46,7 @@ def get_card_type(card):
 
 #scoring rules
 class Rules:
-    def __init__(self, month, oya, deck):
+    def __init__(self, month, oya, deck, sim):
         self.parent = deck
         self.patterns = [['猪鹿蝶', 5, property_array([prop_dic['tane_ani']] * 3)],
                          ['赤短', 6, property_array([prop_dic['tan_r']] * 3)],
@@ -60,7 +60,8 @@ class Rules:
         self.tan_lim = 5
         self.month = month
         self.oya = oya
-        print('in Rules, month is %d' % month)
+        self.sim = sim
+        # print('in Rules, month is %d' % month)
         # self.record_names = [pattern[0] for pattern in self.patterns] + ['ko', 'kas', 'tane', 'tan']
         self.records = {}
         self.new_patterns = []
@@ -83,7 +84,6 @@ class Rules:
         self.koikoi_panel.set_center([WINDOW_WIDTH / 2, WINDOW_HEIGHT / 2])
         self.score_panel = None
         self.total_point = 0
-        self.card_num = DECK_SIZE
         self.is_human = self.parent.IsHuman()
         self.agent = self.parent.agent
 
@@ -113,7 +113,7 @@ class Rules:
         self.new_patterns = [pattern]
         self.records[text] = pattern
         if self.state == self.state_dic['idle']:
-            print('change to state score!')
+            # print('change to state score!')
             self.ToScoreState()
 
     def CheckPatterns(self, in_arr, cards_prop):
@@ -124,7 +124,7 @@ class Rules:
         for name, pattern in zip(name_list, self.patterns + self.kous):
             if (in_arr >= pattern[2]).all():
                 if self.Check(pattern[:-1], name):
-                    print(name + 'is checked')
+                    # print(name + 'is checked')
                     new_pattern = True
                     cards = []
                     for idx, i in enumerate(pattern[2]):
@@ -156,18 +156,20 @@ class Rules:
                         recorded_order.append(card.order)
                         count = count + 1
                         dis_cards.append(card)
-        print('month card count : ' + str(count))
+        # print('month card count : ' + str(count))
         if count == 4:
             pattern = [name, val]
             if self.Check(pattern, name):
                 new_pattern = True
                 cards = cards_prop[idx]
                 new_patterns.append(pattern + [dis_cards])
+        # no_koikoi = False
         if new_pattern:
             self.new_patterns = new_patterns
             if self.new_patterns != [] and self.state == self.state_dic['idle']:
-                print('change to state pump!')
+                # print('change to state pump!')
                 if self.card_num == 0:
+                    # no_koikoi = True
                     self.no_koikoi = True
                 self.state = self.state_dic['pump']
                 self.pump_idx = 0
@@ -184,15 +186,15 @@ class Rules:
             if self.is_human:
                 Res = self.koikoi_panel.ProcessInput(events, pressed_keys)
             else:
-                print('Action with koikoi=True')
+                # print('Action with koikoi=True')
                 Res = self.agent.Action(koikoi=True)
-                print('Res: ' + str(Res))
+                # print('Res: ' + str(Res))
             if Res == True:
                 self.state = self.state_dic['idle']
             elif Res == False:
                 self.state = self.state_dic['score']
                 self.UpdateScorePanel()
-                print('score panel is updated')
+                # print('score panel is updated')
         elif self.state == self.state_dic['score']:
             # print('now in state score')
             Res = self.score_panel.ProcessInput(events, pressed_keys)
@@ -204,17 +206,17 @@ class Rules:
                 if event.type == pygame.MOUSEBUTTONDOWN:
                     pos = pygame.mouse.get_pos()
                     if self.state == self.state_dic['pump'] and self.Collide(pos):
-                        print('window is clicked')
-                        print('and the state is now pump')
+                        # print('window is clicked')
+                        # print('and the state is now pump')
                         self.pump_idx = self.pump_idx + 1
-                        print('pump idx : ' + str(self.pump_idx))
-                        print('new_patterns : ' + str(self.new_patterns))
+                        # print('pump idx : ' + str(self.pump_idx))
+                        # print('new_patterns : ' + str(self.new_patterns))
                         if self.pump_idx == len(self.new_patterns):
                             if self.no_koikoi:
                                 self.ToScoreState()
                             else:
                                 self.state = self.state_dic['koikoi']
-                                print('the state is now koikoi')
+                                # print('the state is now koikoi')
                                 # self.state = self.state_dic['idle']
         return False
 
@@ -232,9 +234,9 @@ class Rules:
                 point = str(val) + '文'
                 texts.append(name + spacing + point)
                 total_point = total_point + val
-        print(record)
-        print('now is in state %d' % self.state)
-        print('number of scored patterns are %d' % len(texts))
+        # print(record)
+        # print('now is in state %d' % self.state)
+        # print('number of scored patterns are %d' % len(texts))
         texts = texts + ['' for i in range(0, 8 - len(texts))]
         point_str = str(total_point)
         self.total_point = total_point
@@ -245,6 +247,11 @@ class Rules:
         self.score_panel.set_center(WINDOW_CENTER)
 
     def Update(self, card_num):
+        if self.sim:
+            if self.state == self.state_dic['pump']:
+                self.state = self.state_dic['koikoi']
+            elif self.state == self.state_dic['score']:
+                self.state = self.state_dic['end']
         self.card_num = card_num
 
     def PumpRender(self, screen):

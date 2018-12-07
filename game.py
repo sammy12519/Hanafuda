@@ -35,12 +35,12 @@ if USER_WINDOW_WIDTH < WINDOW_WIDTH and USER_WINDOW_HEIGHT < WINDOW_HEIGHT:
 CARD_CONTENTS = [[i, j] for i in range(1, 13) for j in range(1, 5)]
 card_contents = CARD_CONTENTS
 
-screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
+
 done = False
 flag = True
 
 # MOVE_TIME = 0.5
-MOVE_FRAME = 30
+MOVE_FRAME = 20
 
 _image_library = {}
 def get_image(path):
@@ -54,11 +54,12 @@ def get_image(path):
     return image
 
 class Card:
-    def __init__(self, content, pos):
+    def __init__(self, content, pos, sim):
         self.month = content[0]
         self.order = content[1]
         self.image = get_image('images/' + str(content[0]) + '_' + str(content[1]) + '.png')
         self.pos = pos
+        self.sim = sim
         self.fig_pos = self.get_fig_pos(pos)
         self.move = False
         self.frame = 0
@@ -70,6 +71,10 @@ class Card:
         self.parent = None
         self.card_width = CARD_WIDTH + 2 * CARD_BOARDER
         self.card_height = CARD_HEIGHT + 2 * CARD_BOARDER
+        if sim:
+            self.move_frame = 0
+        else:
+            self.move_frame = MOVE_FRAME
 
     def toggle_selected(self):
         self.selected = not self.selected
@@ -91,8 +96,8 @@ class Card:
             if event.type == pygame.MOUSEBUTTONDOWN:
                 pos = pygame.mouse.get_pos()
                 if self.Collide(pos):
-                    print('card %d %d is clicked' % (self.month, self.order))
-                    print('card type is ' + get_card_type(self))
+                    # print('card %d %d is clicked' % (self.month, self.order))
+                    # print('card type is ' + get_card_type(self))
                     return self
         return None
 
@@ -130,9 +135,10 @@ class Card:
         self.Draw(screen, self.pos)
 
 class Deck:
-    def __init__(self, card_list, y, month, oya, player, agent_type = 'Human'):
+    def __init__(self, card_list, y, month, oya, player, agent_type = 'Human', sim=False):
         self.oya = oya
         self.player = player
+        self.sim = sim
         self.cards = card_list
         for card in self.cards:
             card.parent = self.cards
@@ -155,7 +161,7 @@ class Deck:
         self.type_spacing = 10
         self.agent_type = agent_type
         self.agent = self.SetAgent(agent_type)
-        self.rules = Rules(month, oya, self)
+        self.rules = Rules(month, oya, self, sim)
 
     def IsHuman(self):
         return self.agent_type == 'Human'
@@ -176,7 +182,7 @@ class Deck:
                 for card in self.cards:
                     selected_card = card.ProcessInput(events, pressed_keys)
                     if selected_card != None:
-                        print('deck get selected card!')
+                        # print('deck get selected card!')
                         return selected_card
             else:
                 selected_card = self.agent.Action()
@@ -187,18 +193,18 @@ class Deck:
         return self.rules.CheckPatterns(self.prop_arr, self.scored_cards_prop)
 
     def ScoreCard(self, card):
-        print(get_card_type(card) + ' card %d %d is scored' % (card.month, card.order))
+        # print(get_card_type(card) + ' card %d %d is scored' % (card.month, card.order))
         type_name = get_card_type(card)
         type_idx = self.score_dic[type_name]
         card.parent = self
         info = CARD_INFO[card.month-1][card.order-1] 
-        print('scored card info: ' + str(info))
+        # print('scored card info: ' + str(info))
         self.prop_arr = self.prop_arr + info
-        print('prop_arr: ' + str(self.prop_arr))
+        # print('prop_arr: ' + str(self.prop_arr))
         for idx, i in enumerate(info):
             if i == 1:
                 self.scored_cards_prop[idx].append(card)
-        print('type_idx in scored_cards is ' + str(type_idx))
+        # print('type_idx in scored_cards is ' + str(type_idx))
         self.scored_cards[type_idx].append(card)
         self.scored_cards_render.append(card)
 
@@ -297,12 +303,17 @@ class MonthPanel:
             screen.blit(surf, rect)
 
 class Round:
-    def __init__(self, month, oya, scores, agent_types):
+    def __init__(self, month, oya, scores, agent_types, sim):
         random.shuffle(card_contents)
+        # global card_contents
+        # a = card_contents[16:]
+        # random.shuffle(a)
+        # card_contents = card_contents[:16] + a
         self.next = self
         self.month = month
         self.oya = oya
         self.scores = scores
+        self.sim = sim
         cards = []
         self.player = self.oya
         self.last_scored_player = None
@@ -321,15 +332,15 @@ class Round:
                 y = self.rest_pos[1] + self.dy * (idx - len(CARD_POS)) 
                 pos = [x, y]
             content = card_contents[idx]
-            card = Card(content, pos)
+            card = Card(content, pos, sim)
             cards.append(card)
         center = [WINDOW_WIDTH - BOARDER - 2 * CARD_WIDTH, WINDOW_HEIGHT / 2]
         self.month_panel = MonthPanel(month, oya, scores, cards, center)
         corner_x = WINDOW_WIDTH - CARD_WIDTH - BOARDER
         self.agent_types = agent_types
-        top_deck = Deck(cards[:DECK_SIZE], BOARDER, month, oya, 0, agent_types[0])
+        top_deck = Deck(cards[:DECK_SIZE], BOARDER, month, oya, 0, agent_types[0], sim)
         bot_y = WINDOW_HEIGHT - CARD_HEIGHT - BOARDER
-        bot_deck = Deck(cards[DECK_SIZE:2 * DECK_SIZE], bot_y, month, oya, 1, agent_types[1])
+        bot_deck = Deck(cards[DECK_SIZE:2 * DECK_SIZE], bot_y, month, oya, 1, agent_types[1], sim)
         self.decks = [top_deck, bot_deck]
         self.agents = [deck.agent for deck in self.decks]
         self.pool = []
@@ -347,7 +358,10 @@ class Round:
         self.state = self.state_dic['idle']
         self.second_flip_state = False
         self.selected_card = None
-        self.wait_time = 30
+        if sim:
+            self.wait_time = 1
+        else:
+            self.wait_time = 30
         self.time_count = 0
 
     def toggle_player(self):
@@ -364,7 +378,7 @@ class Round:
         if self.state == self.state_dic['end']:
             return self.decks[self.player].rules.total_point
         else:
-            print('access score not in end state!')
+            print('Err: access score not in end state!')
 
     def ProcessInput(self, events, pressed_keys):
         filtered_events = []
@@ -378,7 +392,7 @@ class Round:
                 if self.decks[self.player].IsHuman():
                     pool_selected_card = card.ProcessInput(filtered_events, pressed_keys)
                     if pool_selected_card != None:
-                        print('get selected card in pool')
+                        # print('get selected card in pool')
                         self.matched_cards = [pool_selected_card]
                 else:
                     card = self.agents[self.player].Action(self.matched_cards)
@@ -391,7 +405,7 @@ class Round:
             deck = self.decks[self.player]
             val = deck.ProcessInput(filtered_events, pressed_keys)
             if val == True:
-                print('Go to end state in Round')
+                # print('Go to end state in Round')
                 self.state = self.state_dic['end']
         else:
             selected_card = None
@@ -418,7 +432,7 @@ class Round:
             if val == 0:
                 self.pool_avail_idx[idx] = 1
                 self.temp_pool_avail_idx[idx] = 1
-                print('get pool idx %d' % idx)
+                # print('get pool idx %d' % idx)
                 return idx
 
     def cover_pos_shift(self, pos):
@@ -453,30 +467,31 @@ class Round:
         self.state_transition_after_move()
 
     def ToIdleState(self):
-        print('to idle state')
+        # print('to idle state')
         deck = self.decks[self.player]
         if self.state != self.state_dic['koikoi'] and deck.CheckPatterns():
-            print('change to state koikoi and now player is %d' % self.player)
+            # print('change to state koikoi and now player is %d' % self.player)
             self.last_scored_player = self.player
             self.state = self.state_dic['koikoi']
         else:
             self.state = self.state_dic['pre_idle']
             # self.state = self.state_dic['idle']
             self.pool_avail_idx = self.temp_pool_avail_idx.copy()
-            print('update pol_avail_idx')
+            # print('update pol_avail_idx')
 
     def PreIdleToIdle(self):
         if self.state == self.state_dic['pre_idle']:
-            self.time_count = self.time_count + 1
             if self.time_count == self.wait_time:
                 self.time_count = 0
                 self.state = self.state_dic['idle']
                 self.toggle_player()
+                self.CheckEmptyDecks()
+            self.time_count = self.time_count + 1
 
     def state_transition_after_move(self):
         #state transition
         if self.state == self.state_dic['idle']:
-            print('to state second')
+            # print('to state second')
             self.state = self.state_dic['second']
         elif self.state == self.state_dic['second']:
             self.ToIdleState()
@@ -488,7 +503,7 @@ class Round:
             if self.state == self.state_dic['match_second']:
                 self.ToIdleState()
             else:
-                print('to state second')
+                # print('to state second')
                 self.state = self.state_dic['second']
 
     def RestUpdate(self):
@@ -509,10 +524,10 @@ class Round:
             l = l + len(deck.cards)
         if l == 0:
             if self.last_scored_player == None:
-                print('oyaken!!')
+                # print('oyaken!!')
                 self.decks[self.oya].rules.Oyaken()
             else:
-                print('last scored player would score')
+                # print('last scored player would score')
                 self.decks[self.last_scored_player].rules.ToScoreState()
             self.state = self.state_dic['koikoi']
 
@@ -533,8 +548,8 @@ class Round:
                 self.move_card_to_pool(MIDDLE_CARD_POS[idx], idx)
             elif num == 1:
                 matched_card = self.matched_cards[0]
-                print('card %d %d is matched' % (matched_card.month, matched_card.order))
-                print('card type is ' + get_card_type(matched_card))
+                # print('card %d %d is matched' % (matched_card.month, matched_card.order))
+                # print('card type is ' + get_card_type(matched_card))
                 pos = self.cover_pos_shift(matched_card.pos)
                 self.move_card_to_pool(pos)
             else:
@@ -545,7 +560,7 @@ class Round:
                         self.state = self.state_dic['match']
                     elif self.state == self.state_dic['second']:
                         self.state = self.state_dic['match_second']
-                    print('to match state')
+                    # print('to match state')
         for i in range(0, 2):
             self.decks[i].Update(self.pool, self.decks[1-i].rules,
                                  self.decks[1-i].scored_cards,
@@ -556,8 +571,6 @@ class Round:
         for card in self.pool:
             card.Update(None)
         self.RestUpdate()
-        if self.state == self.state_dic['idle']:
-            self.CheckEmptyDecks()
 
     def RestDrawPolygon(self, pos_list, num):
         dy = self.card_depth
@@ -602,19 +615,21 @@ class Round:
         self.next = None
 
 class Game:
-    def __init__(self):
+    def __init__(self, agent_types, sim = False):
         self.next = self
-        self.month = 1
+        self.month = 5
         self.scores = [0, 0]
         self.oya = 1
-        self.agent_types = ['Random', 'Human']
-        self.temp_round = Round(self.month, self.oya, self.scores, self.agent_types)
+        self.agent_types = agent_types
+        self.sim = sim
+        self.temp_round = Round(self.month, self.oya, self.scores, self.agent_types, sim)
+        self.round_count = 0
         
     def ProcessInput(self, events, pressed_keys):
         filtered_events = []
         for event in events:
             if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
-                print('next round is called in Game')
+                # print('next round is called in Game')
                 self.next = Game()
             else:
                 filtered_events.append(event)
@@ -623,12 +638,14 @@ class Game:
     def Update(self):
         self.temp_round.Update()
         if self.temp_round.IsEnd():
-            print('Round is ended in Game')
+            # print('Round is ended in Game')
             player = self.temp_round.player
             self.scores[player] = self.scores[player] + self.temp_round.GetScore()
-            print('scores : ' + str(self.scores))
+            # print('scores : ' + str(self.scores))
             self.month = self.month % 12 + 1
-            self.temp_round = Round(self.month, self.oya, self.scores, self.agent_types)
+            self.round_count = self.round_count + 1
+            self.oya = 1 - self.oya
+            self.temp_round = Round(self.month, self.oya, self.scores, self.agent_types, self.sim)
 
     def Render(self, screen):
         self.temp_round.Render(screen)
@@ -675,4 +692,6 @@ def run_game(width, height, fps, starting_scene):
         pygame.display.flip()
         clock.tick(fps)
 
-run_game(WINDOW_WIDTH, WINDOW_HEIGHT, 60, Game())
+if __name__ == '__main__':
+    screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
+    run_game(WINDOW_WIDTH, WINDOW_HEIGHT, 60, Game(['Random', 'Human']))
