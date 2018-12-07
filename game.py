@@ -3,7 +3,7 @@ import pygame
 import os
 import random
 import numpy as np
-
+from agent import *
 
 #init pygame
 pygame.init()
@@ -306,6 +306,7 @@ class Rules:
         self.window_pos = [self.window_pos_x, self.window_pos_y] 
         self.font = pygame.font.Font("KosugiMaru-Regular.ttf", 40)
         self.state_dic = {'idle':0, 'pump':1, 'koikoi':2, 'score':3, 'end':4}
+        self.no_koikoi = False
         self.state = self.state_dic['idle'] 
         self.text = ''
         self.pump_idx = 0
@@ -403,9 +404,8 @@ class Rules:
             if self.new_patterns != [] and self.state == self.state_dic['idle']:
                 print('change to state pump!')
                 if self.card_num == 0:
-                    self.ToScoreState()
-                else:
-                    self.state = self.state_dic['pump']
+                    self.no_koikoi = True
+                self.state = self.state_dic['pump']
                 self.pump_idx = 0
         return new_pattern
 
@@ -446,9 +446,12 @@ class Rules:
                         print('pump idx : ' + str(self.pump_idx))
                         print('new_patterns : ' + str(self.new_patterns))
                         if self.pump_idx == len(self.new_patterns):
-                            self.state = self.state_dic['koikoi']
-                            print('the state is now koikoi')
-                            # self.state = self.state_dic['idle']
+                            if self.no_koikoi:
+                                self.ToScoreState()
+                            else:
+                                self.state = self.state_dic['koikoi']
+                                print('the state is now koikoi')
+                                # self.state = self.state_dic['idle']
         return False
 
     def UpdateScorePanel(self):
@@ -601,37 +604,6 @@ class Card:
     def Render(self, screen):
         self.Draw(screen, self.pos)
 
-class SimpleAgent:
-    def __init__(self, deck):
-        print('simple agent is initialized')
-        self.deck = deck
-        self.cards = deck.cards
-        self.pool = deck.pool
-        self.opp_score = deck.opponent_scored
-        self.state_dic = {'idle':0, 'actioned':1, 'match':2, 'koikoi':3}
-        self.state = self.state_dic['idle']
-
-    def Action(self, cards = None, koikoi = False):
-        if koikoi:
-            return self.KoiKoiAction()
-        elif cards == None:
-            return self.HandAction()
-        else:
-            return self.PoolAction(cards)
-    
-    def KoiKoiAction(self):
-        return False
-
-    def HandAction(self):
-        return self.cards[0] 
-
-    def PoolAction(self, cards):
-        return cards[0]
-
-class HumanAgent:
-    def __init__(self, deck):
-        self.deck = deck
-
 class Deck:
     def __init__(self, card_list, y, month, oya, player, agent_type = 'Human'):
         self.oya = oya
@@ -645,7 +617,10 @@ class Deck:
         self.prop_arr = np.zeros(PROP_DIC_LEN, dtype=int)
         self.scored_cards_prop = [[] for i in range(0, PROP_DIC_LEN)]
         self.pool = None
-        self.opponent_scored = None
+        self.opp_rules = None
+        self.opp_scored_cards = None
+        self.opp_scored_cards_prop = None
+        self.opp_prop_arr = None 
         self.move = False
         self.deck_y = y
         self.right_corner = [WINDOW_WIDTH - BOARDER - CARD_WIDTH, y]
@@ -663,8 +638,10 @@ class Deck:
     def SetAgent(self, agent_type):
         if self.IsHuman():
             return HumanAgent(self)
-        else:
+        elif agent_type == 'Simple':
             return SimpleAgent(self)
+        else:
+            return RandomAgent(self)
 
     def ProcessInput(self, events, pressed_keys):
         if self.rules.IsNotIdle() and self.rules.state != self.rules.state_dic['end']:
@@ -716,9 +693,14 @@ class Deck:
             card.Update([x, y])
             x = x + CARD_WIDTH + CARD_SPACING
 
-    def Update(self, pool, opponent_scored):
+    def Update(self, pool, opp_rules, opp_scored_cards,
+               opp_scored_cards_prop, opp_prop_arr):
         self.pool = pool
-        self.opponent_scored = opponent_scored       
+        self.opp_rules = opp_rules
+        self.opp_scored_cards = opp_scored_cards
+        self.opp_scored_cards_prop = opp_scored_cards_prop
+        self.opp_prop_arr = opp_prop_arr
+        # self.agent.UpdateOppInfo()
         for card in self.cards:
             card.Update(None)
         # if cards in pool is selected
@@ -836,10 +818,12 @@ class Round:
         for card in self.rest:
             card.parent = self.rest
         self.matched_cards = None
-        self.state_dic = {'idle':0, 'match':1, 'second':2, 'match_second':3, 'koikoi':4, 'end':5}
+        self.state_dic = {'idle':0, 'match':1, 'second':2, 'match_second':3, 'koikoi':4, 'end':5, 'pre_idle':6}
         self.state = self.state_dic['idle']
         self.second_flip_state = False
         self.selected_card = None
+        self.wait_time = 30
+        self.time_count = 0
 
     def toggle_player(self):
         self.player = 1 - self.player
@@ -873,7 +857,11 @@ class Round:
                         self.matched_cards = [pool_selected_card]
                 else:
                     card = self.agents[self.player].Action(self.matched_cards)
-                    self.matched_cards = [card]
+                    if card in self.matched_cards:
+                        self.matched_cards = [card]
+                    else:
+                        print('Err: Agent is trying to pick an illegal card from pool')
+                        quit()
         elif self.state == self.state_dic['koikoi']:
             deck = self.decks[self.player]
             val = deck.ProcessInput(filtered_events, pressed_keys)
@@ -947,10 +935,18 @@ class Round:
             self.last_scored_player = self.player
             self.state = self.state_dic['koikoi']
         else:
-            self.state = self.state_dic['idle']
+            self.state = self.state_dic['pre_idle']
+            # self.state = self.state_dic['idle']
             self.pool_avail_idx = self.temp_pool_avail_idx.copy()
             print('update pol_avail_idx')
-            self.toggle_player()
+
+    def PreIdleToIdle(self):
+        if self.state == self.state_dic['pre_idle']:
+            self.time_count = self.time_count + 1
+            if self.time_count == self.wait_time:
+                self.time_count = 0
+                self.state = self.state_dic['idle']
+                self.toggle_player()
 
     def state_transition_after_move(self):
         #state transition
@@ -996,6 +992,7 @@ class Round:
             self.state = self.state_dic['koikoi']
 
     def Update(self):
+        self.PreIdleToIdle()
         if self.state == self.state_dic['koikoi']:
             rules = self.decks[self.player].rules
             if rules.state == rules.state_dic['end']:
@@ -1024,8 +1021,13 @@ class Round:
                     elif self.state == self.state_dic['second']:
                         self.state = self.state_dic['match_second']
                     print('to match state')
-        self.decks[0].Update(self.pool, self.decks[1].scored_cards)
-        self.decks[1].Update(self.pool, self.decks[0].scored_cards)
+        for i in range(0, 2):
+            self.decks[i].Update(self.pool, self.decks[1-i].rules,
+                                 self.decks[1-i].scored_cards,
+                                 self.decks[1-i].scored_cards_prop,
+                                 self.decks[1-i].prop_arr)
+        for deck in self.decks:
+            deck.agent.UpdateOppInfo()
         for card in self.pool:
             card.Update(None)
         self.RestUpdate()
@@ -1080,7 +1082,7 @@ class Game:
         self.month = 1
         self.scores = [0, 0]
         self.oya = 1
-        self.agent_types = ['Simple', 'Human']
+        self.agent_types = ['Random', 'Human']
         self.temp_round = Round(self.month, self.oya, self.scores, self.agent_types)
         
     def ProcessInput(self, events, pressed_keys):
