@@ -135,7 +135,7 @@ class Card:
         self.Draw(screen, self.pos)
 
 class Deck:
-    def __init__(self, card_list, y, month, oya, player, agent_type = 'Human', sim=False):
+    def __init__(self, card_list, y, month, oya, player, agent, sim=False):
         self.oya = oya
         self.player = player
         self.sim = sim
@@ -149,9 +149,10 @@ class Deck:
         self.scored_cards_prop = [[] for i in range(0, PROP_DIC_LEN)]
         self.pool = None
         self.opp_rules = None
-        self.opp_scored_cards = None
-        self.opp_scored_cards_prop = None
-        self.opp_prop_arr = None 
+        self.opp_scored_cards_render = []
+        self.opp_scored_cards = [[] for i in range(0, len(self.score_dic))]
+        self.opp_scored_cards_prop = [[] for i in range(0, PROP_DIC_LEN)]
+        self.opp_prop_arr = np.zeros(PROP_DIC_LEN, dtype=int)
         self.move = False
         self.deck_y = y
         self.right_corner = [WINDOW_WIDTH - BOARDER - CARD_WIDTH, y]
@@ -159,20 +160,11 @@ class Deck:
         self.overlap_ratio = 1 / 3
         self.overlap = int(self.overlap_ratio * CARD_WIDTH)
         self.type_spacing = 10
-        self.agent_type = agent_type
-        self.agent = self.SetAgent(agent_type)
+        self.agent = agent
         self.rules = Rules(month, oya, self, sim)
 
     def IsHuman(self):
-        return self.agent_type == 'Human'
-    
-    def SetAgent(self, agent_type):
-        if self.IsHuman():
-            return HumanAgent(self)
-        elif agent_type == 'Simple':
-            return SimpleAgent(self)
-        else:
-            return RandomAgent(self)
+        return self.agent.name == 'Human'
 
     def ProcessInput(self, events, pressed_keys):
         if self.rules.IsNotIdle() and self.rules.state != self.rules.state_dic['end']:
@@ -186,7 +178,14 @@ class Deck:
                         return selected_card
             else:
                 selected_card = self.agent.Action()
-                return selected_card
+                if selected_card != None and  selected_card not in self.cards:
+                    print('Err: Agent is trying to give a card not in hand!')
+                    print('owned cards: ')
+                    for card in self.cards:
+                        print('(%d,%d)' % (card.month, card.order), end='')
+                    print('trying to deal card (%d,%d)' % (selected_card.month, selected_card.order))
+                else:
+                    return selected_card
         return None
 
     def CheckPatterns(self):
@@ -200,7 +199,7 @@ class Deck:
         info = CARD_INFO[card.month-1][card.order-1] 
         # print('scored card info: ' + str(info))
         self.prop_arr = self.prop_arr + info
-        # print('prop_arr: ' + str(self.prop_arr))
+        # print('in score card, prop_arr: ' + str(self.prop_arr))
         for idx, i in enumerate(info):
             if i == 1:
                 self.scored_cards_prop[idx].append(card)
@@ -224,10 +223,11 @@ class Deck:
             card.Update([x, y])
             x = x + CARD_WIDTH + CARD_SPACING
 
-    def Update(self, pool, opp_rules, opp_scored_cards,
-               opp_scored_cards_prop, opp_prop_arr):
+    def Update(self, pool, opp_rules, opp_scored_cards_render,
+               opp_scored_cards, opp_scored_cards_prop, opp_prop_arr):
         self.pool = pool
         self.opp_rules = opp_rules
+        self.opp_scored_cards_render = opp_scored_cards_render
         self.opp_scored_cards = opp_scored_cards
         self.opp_scored_cards_prop = opp_scored_cards_prop
         self.opp_prop_arr = opp_prop_arr
@@ -303,7 +303,7 @@ class MonthPanel:
             screen.blit(surf, rect)
 
 class Round:
-    def __init__(self, month, oya, scores, agent_types, sim):
+    def __init__(self, month, oya, scores, agents, sim):
         random.shuffle(card_contents)
         # global card_contents
         # a = card_contents[16:]
@@ -337,12 +337,11 @@ class Round:
         center = [WINDOW_WIDTH - BOARDER - 2 * CARD_WIDTH, WINDOW_HEIGHT / 2]
         self.month_panel = MonthPanel(month, oya, scores, cards, center)
         corner_x = WINDOW_WIDTH - CARD_WIDTH - BOARDER
-        self.agent_types = agent_types
-        top_deck = Deck(cards[:DECK_SIZE], BOARDER, month, oya, 0, agent_types[0], sim)
+        top_deck = Deck(cards[:DECK_SIZE], BOARDER, month, oya, 0, agents[0], sim)
         bot_y = WINDOW_HEIGHT - CARD_HEIGHT - BOARDER
-        bot_deck = Deck(cards[DECK_SIZE:2 * DECK_SIZE], bot_y, month, oya, 1, agent_types[1], sim)
+        bot_deck = Deck(cards[DECK_SIZE:2 * DECK_SIZE], bot_y, month, oya, 1, agents[1], sim)
         self.decks = [top_deck, bot_deck]
-        self.agents = [deck.agent for deck in self.decks]
+        self.agents = agents
         self.pool = []
         for idx, card in enumerate(cards[2 * DECK_SIZE:2 * DECK_SIZE + POOL_SIZE]):
             card.in_pool_idx = idx
@@ -350,6 +349,9 @@ class Round:
             self.pool.append(card)
         self.pool_avail_idx = [1] * POOL_SIZE + [0] * (POOL_WIDTH * 2 - POOL_SIZE) 
         self.temp_pool_avail_idx = self.pool_avail_idx.copy()
+        # for agent, deck in zip(agents, self.decks):
+            # print('get info')
+            # agent.GetInfo(deck)
         self.rest = cards[2 * DECK_SIZE + POOL_SIZE:]
         for card in self.rest:
             card.parent = self.rest
@@ -400,6 +402,10 @@ class Round:
                         self.matched_cards = [card]
                     else:
                         print('Err: Agent is trying to pick an illegal card from pool')
+                        print('Current matched cards : ')
+                        for c in self.matched_cards:
+                            print('(%d,%d)'%(c.month, c.order))
+                        print('Agent is trying to pick : (%d,%d)' % (card.month, card.order))
                         quit()
         elif self.state == self.state_dic['koikoi']:
             deck = self.decks[self.player]
@@ -563,11 +569,12 @@ class Round:
                     # print('to match state')
         for i in range(0, 2):
             self.decks[i].Update(self.pool, self.decks[1-i].rules,
+                                 self.decks[1-i].scored_cards_render,
                                  self.decks[1-i].scored_cards,
                                  self.decks[1-i].scored_cards_prop,
                                  self.decks[1-i].prop_arr)
         for deck in self.decks:
-            deck.agent.UpdateOppInfo()
+            deck.agent.GetInfo(deck)
         for card in self.pool:
             card.Update(None)
         self.RestUpdate()
@@ -621,9 +628,22 @@ class Game:
         self.scores = [0, 0]
         self.oya = 1
         self.agent_types = agent_types
+        self.agents = [self.SetAgent(tp) for tp in agent_types]
         self.sim = sim
-        self.temp_round = Round(self.month, self.oya, self.scores, self.agent_types, sim)
+        self.temp_round = Round(self.month, self.oya, self.scores, self.agents, sim)
         self.round_count = 0
+
+    def SetAgent(self, agent_type):
+        if agent_type == 'Human':
+            return HumanAgent()
+        elif agent_type == 'Simple':
+            return SimpleAgent()
+        elif agent_type == 'Complete':
+            return CompleteAgent()
+        elif agent_type == 'HungWei':
+            return HungWeiAgent()
+        else:
+            return RandomAgent()
         
     def ProcessInput(self, events, pressed_keys):
         filtered_events = []
@@ -645,7 +665,8 @@ class Game:
             self.month = self.month % 12 + 1
             self.round_count = self.round_count + 1
             self.oya = 1 - self.oya
-            self.temp_round = Round(self.month, self.oya, self.scores, self.agent_types, self.sim)
+            self.agents = [self.SetAgent(tp) for tp in self.agent_types]
+            self.temp_round = Round(self.month, self.oya, self.scores, self.agents, self.sim)
 
     def Render(self, screen):
         self.temp_round.Render(screen)
@@ -694,4 +715,6 @@ def run_game(width, height, fps, starting_scene):
 
 if __name__ == '__main__':
     screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
-    run_game(WINDOW_WIDTH, WINDOW_HEIGHT, 60, Game(['Random', 'Human']))
+    # run_game(WINDOW_WIDTH, WINDOW_HEIGHT, 60, Game(['Simple', 'Human']))
+    # run_game(WINDOW_WIDTH, WINDOW_HEIGHT, 60, Game(['Complete', 'Human']))
+    run_game(WINDOW_WIDTH, WINDOW_HEIGHT, 60, Game(['Complete', 'Human']))

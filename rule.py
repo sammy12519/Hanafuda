@@ -33,6 +33,14 @@ CARD_INFO= [[KOU, TAN_R, kasu, kasu],
             [SUBKOU, TANE, TAN, kasu],
             [KOU, kasu, kasu, kasu]]
 
+CARD_PROP = [[] for i in range(0, PROP_DIC_LEN)]
+for m, mcards in enumerate(CARD_INFO):
+    for order, card in enumerate(mcards):
+        for idx, val in enumerate(card):
+            if val == 1:
+                CARD_PROP[idx].append([m, order]) 
+# print(CARD_PROP)
+
 def get_card_type(card):
     props = CARD_INFO[card.month - 1][card.order - 1]
     name_order = ['kou', 'tane', 'tan', 'kasu']

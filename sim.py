@@ -1,4 +1,5 @@
 import game
+import sys
 
 # class Agent:
     # def __init__(self):
@@ -8,14 +9,15 @@ import game
         # return 
 
 class Simulate:
-    def __init__(self):
-        self.agents = ['Random', 'Simple']
+    def __init__(self, round_num):
+        self.agents = ['HungWei', 'Complete']
         self.sim_game = game.Game(self.agents, sim=True)
         self.tr = self.sim_game.temp_round
+        self.round_num = round_num
 
     def simulate(self):
         counting = 0
-        while(self.sim_game.round_count <= 1000):
+        while(self.sim_game.round_count < self.round_num):
             if self.sim_game.round_count % 100 == 0 and self.sim_game.round_count // 100 == counting:
                 print('round : %d' % self.sim_game.round_count)
                 counting = counting + 1
@@ -36,6 +38,6 @@ class Simulate:
 
 
 if __name__ == '__main__':
-    sim = Simulate()
-    print(sim.agents)
+    sim = Simulate(int(sys.argv[1]))
     print(sim.simulate())
+    print(sim.agents)
